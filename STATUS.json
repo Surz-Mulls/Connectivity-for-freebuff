@@ -3,7 +3,7 @@
   "stage": "release",
   "module": "handoff-pushed",
   "state": "waiting-user",
-  "last_commit": "fea70af",
+  "last_commit": "2505682",
   "tests": {
     "pass": 63,
     "fail": 0,
@@ -11,10 +11,10 @@
     "not_verified": 28
   },
   "needs_user": [
-    "Install the debug APK on the Mi 12 and run journeys B01-B12 in docs/batch-test-matrix.md",
-    "Run the KDE Connect remote-input baseline in docs/baseline-remote-input.md and paste the evidence table",
-    "Install Qt 6 (pacman qt6-declarative) to launch desktop/run-continuity.sh and run journey D01",
-    "Add the FreeBuffGithub secret as an SSH deploy key on Surz-Mulls/Connectivity-for-freebuff to push branch FreeBuff"
+    "Install artifacts/android/app-debug.apk on the Mi 12 and run journeys B01-B12 in docs/batch-test-matrix.md",
+    "Run the KDE Connect remote-input baseline (docs/baseline-remote-input.md) and paste the evidence table",
+    "Install Qt 6 (pacman -S qt6-declarative) to launch desktop/run-continuity.sh (journey D01)",
+    "Include the Quickshell panel and report which import/API names your installed version needs"
   ],
-  "notes": "Branch FreeBuff pushed. Daemon: 63 tests passing; APK built. Phone/Qt/Quickshell rows remain blocked in docs/feature-matrix.md."
+  "notes": "Branch FreeBuff pushed and verified on GitHub. Daemon 63 tests passing, theme drift clean, debug APK built (29,153,659 bytes, sha256 76295cbc...47c8). Phone/Qt/Quickshell rows remain blocked or unverified and are labelled that way in docs/feature-matrix.md."
 }
