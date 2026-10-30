@@ -5,6 +5,12 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-10-30T03:40Z — M6 branch pushed
+
+- Branch `FreeBuff` pushed to `Surz-Mulls/Connectivity-for-freebuff` (`fea70af`).
+- 63 tests passing · theme drift clean · debug APK in `artifacts/android/`.
+- Remaining work is hardware/compositor-bound (see `STATUS.json` → `needs_user`).
+
 ## 2026-10-30T00:00Z — M5 batch testing, docs and artifacts (in progress)
 
 - **Daemon: 63 automated tests passing** (`pytest -q`): framing limits, identity, signature tamper,
