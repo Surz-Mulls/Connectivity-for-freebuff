@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Run full diagnostics through the daemon and print the exported report paths.
+# Safe by design: read-only checks, sanitized output, no system changes.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PY="${PYTHON:-$ROOT/.venv/bin/python}"
+exec "$PY" -m continuityd.cli diagnostics "$@"

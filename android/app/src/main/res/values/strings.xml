@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Continuity</string>
+    <string name="notification_access_label">Continuity notification relay</string>
+    <string name="service_channel">Connection</string>
+    <string name="service_title">Continuity</string>
+    <string name="service_text">Paired with your computer</string>
+</resources>

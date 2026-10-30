@@ -1,0 +1,15 @@
+{
+  "updated": "2026-10-30T00:00:00Z",
+  "stage": "batch-test",
+  "module": "android-build-and-docs",
+  "state": "running",
+  "last_commit": "pending",
+  "tests": { "pass": 63, "fail": 0, "blocked": 21, "not_verified": 28 },
+  "needs_user": [
+    "Install the debug APK on the Mi 12 and run journeys B01-B12 in docs/batch-test-matrix.md",
+    "Run the KDE Connect remote-input baseline in docs/baseline-remote-input.md and paste the evidence table",
+    "Install Qt 6 (pacman qt6-declarative) to launch desktop/run-continuity.sh and run journey D01",
+    "Add the FreeBuffGithub secret as an SSH deploy key on Surz-Mulls/Connectivity-for-freebuff to push branch FreeBuff"
+  ],
+  "notes": "Daemon: 63 tests passing, IPC/diagnostics verified. Android APK build executed on an unprivileged host. Phone, Qt and Quickshell paths remain unverified and are marked blocked in docs/feature-matrix.md."
+}

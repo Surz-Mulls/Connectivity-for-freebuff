@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: #1e1e2e;
+        color: #cdd6f4;
+        width: 260px;
+        margin: 0;
+        padding: 14px;
+      }
+      h1 { font-size: 14px; margin: 0 0 8px; color: #89b4fa; }
+      p { font-size: 12px; color: #a6adc8; margin: 0 0 12px; }
+      button {
+        width: 100%;
+        padding: 9px;
+        border: 0;
+        border-radius: 8px;
+        background: #89b4fa;
+        color: #11111b;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      #result { margin-top: 10px; font-size: 11px; color: #a6e3a1; min-height: 14px; }
+    </style>
+  </head>
+  <body>
+    <h1>Continuity</h1>
+    <p>Send the current tab to your paired phone. The phone shows the exact URL before opening it.</p>
+    <button id="send">Send this tab</button>
+    <div id="result"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

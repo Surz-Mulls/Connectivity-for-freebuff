@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=KonqPopupMenu/Plugin
+MimeType=all/all;
+Actions=sendToPhone;
+X-KDE-Priority=TopLevel
+Icon=phone
+X-KDE-Submenu=Continuity
+
+[Desktop Action sendToPhone]
+Name=Send to phone
+Icon=phone
+Exec=sh -c 'exec "$HOME/.local/share/continuity/integrations/continuity-send.sh" %F'

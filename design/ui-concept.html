@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Continuity — UI concept (not implemented)</title>
+<style>
+:root{
+  --base:#1e1e2e;--mantle:#181825;--crust:#11111b;--s0:#313244;--s1:#45475a;--s2:#585b70;--o0:#6c7086;
+  --text:#cdd6f4;--sub:#a6adc8;--accent:#89b4fa;--on:#11111b;--ok:#a6e3a1;--warn:#f9e2af;--err:#f38ba8;--info:#74c7ec;--priv:#cba6f7;
+  --r:12px;--font:Inter,'Noto Sans',system-ui,sans-serif;
+}
+:root[data-theme="latte"]{
+  --base:#eff1f5;--mantle:#e6e9ef;--crust:#dce0e8;--s0:#ccd0da;--s1:#bcc0cc;--s2:#acb0be;--o0:#9ca0b0;
+  --text:#4c4f69;--sub:#6c6f85;--accent:#1e66f5;--on:#eff1f5;--ok:#40a02b;--warn:#df8e1d;--err:#d20f39;--info:#209fb5;--priv:#8839ef;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--crust);color:var(--text);font:14px/1.45 var(--font);padding:16px}
+h1{font-size:18px;margin:0 0 4px}
+.note{color:var(--sub);margin:0 0 16px;font-size:12px}
+.bar{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+button{font:inherit;color:var(--text);background:var(--s0);border:1px solid var(--s1);border-radius:999px;padding:6px 14px;cursor:pointer;min-height:32px}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start}
+.card{background:var(--base);border:1px solid var(--s0);border-radius:var(--r);padding:14px;overflow:hidden}
+.card h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);margin:0 0 10px;font-weight:600}
+.row{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--s0)}
+.row:first-of-type{border-top:0}
+.grow{flex:1;min-width:0}
+.sub{color:var(--sub);font-size:12px}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.pill{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.err{color:var(--err)}.priv{color:var(--priv)}.info{color:var(--info)}
+.bgok{background:var(--ok)}.bgwarn{background:var(--warn)}.bgerr{background:var(--err)}
+.prog{height:6px;border-radius:999px;background:var(--s0);overflow:hidden;margin-top:6px}
+.prog>i{display:block;height:100%;background:var(--accent);width:62%}
+.btn{background:var(--accent);color:var(--on);border:0;font-weight:600}
+.layout{display:grid;grid-template-columns:120px 1fr;gap:12px}
+.nav{display:flex;flex-direction:column;gap:4px}
+.nav span{padding:7px 10px;border-radius:8px;color:var(--sub)}
+.nav .on{background:var(--s0);color:var(--text)}
+.phone{width:260px;margin:0 auto;border:6px solid var(--s1);border-radius:30px;background:var(--mantle);padding:14px;min-height:430px}
+.tile{display:flex;gap:8px;margin:10px 0}
+.tile div{flex:1;background:var(--s0);border-radius:var(--r);padding:10px;text-align:center;font-size:12px}
+.tile .active{background:var(--accent);color:var(--on)}
+.banner{border:1px solid var(--err);color:var(--err);border-radius:var(--r);padding:8px 10px;font-size:12px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+</style>
+</head>
+<body>
+<h1>Continuity — UI concept</h1>
+<p class="note">Visual reference for the polish pass only. Nothing here is a working feature. Colours come from design/tokens.json; every status pairs a colour with an icon-like dot and a text label.</p>
+<div class="bar">
+  <button id="theme" aria-pressed="false">Switch to light theme</button>
+</div>
+
+<div class="grid">
+
+  <section class="card" aria-label="Quickshell popup concept">
+    <h2>Quickshell popup (desktop)</h2>
+    <div class="row"><span class="dot bgok"></span><div class="grow"><strong>Mi 12</strong><div class="sub">Connected · Wi-Fi · battery 78%</div></div><span class="pill ok">Connected</span></div>
+    <div class="row"><div class="grow"><strong>report.pdf → phone</strong><div class="sub">8.2 MB of 13.1 MB</div><div class="prog"><i></i></div></div><button>Cancel</button></div>
+    <div class="row"><div class="grow"><strong>Clipboard</strong><div class="sub">Laptop → phone on · phone → laptop manual</div></div><button>Push</button></div>
+    <div class="row"><div class="grow"><strong>Live item</strong><div class="sub">Media: playing on phone</div></div><button>Open in window</button></div>
+    <div class="row"><div class="grow"><strong>Privacy mode</strong><div class="sub">Pauses clipboard and sensitive forwarding</div></div><button aria-pressed="false">Off</button></div>
+  </section>
+
+  <section class="card" aria-label="Desktop app concept">
+    <h2>Desktop app</h2>
+    <div class="layout">
+      <nav class="nav" aria-label="Sections"><span class="on">Devices</span><span>Transfers</span><span>DeX Workspace</span><span>Privacy</span><span>Diagnostics</span></nav>
+      <div>
+        <div class="row"><span class="dot bgok"></span><div class="grow"><strong>Mi 12</strong><div class="sub">Trusted since pairing · fingerprint a1b2…c3d4</div></div><button>Revoke</button></div>
+        <div class="row"><div class="grow"><strong>DeX Workspace</strong><div class="sub">Mode chosen: <span class="info">virtual display</span> (reason: scrcpy ≥ 3.0, device authorised)</div></div><button class="btn">Start</button></div>
+        <div class="row"><div class="grow"><strong>Camera / microphone</strong><div class="sub">Off. Never starts without your tap on the phone.</div></div><span class="pill priv">Off</span></div>
+        <div class="row"><div class="grow"><strong>Diagnostics</strong><div class="sub">Last report: 14 pass · 2 warn · 1 blocked</div></div><button>Run full diagnostics</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-label="Android concept">
+    <h2>Android (home)</h2>
+    <div class="phone">
+      <strong style="font-size:18px">Arch laptop</strong>
+      <div class="sub"><span class="ok">● Connected</span> · last seen just now</div>
+      <div class="tile"><div class="active">Share to laptop</div><div>Clipboard</div><div>Find laptop</div></div>
+      <div class="row"><div class="grow"><strong>Notifications</strong><div class="sub">Mirroring on · replies supported where the app allows</div></div></div>
+      <div class="row"><div class="grow"><strong>Permission needed</strong><div class="sub warn">Notification access is off</div></div><button>Open settings</button></div>
+      <div class="banner" role="status"><span>Camera is active for the laptop</span><button>Stop</button></div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const b=document.getElementById('theme');
+b.addEventListener('click',()=>{
+  const r=document.documentElement,l=r.dataset.theme==='latte';
+  if(l){delete r.dataset.theme;b.textContent='Switch to light theme';b.setAttribute('aria-pressed','false')}
+  else{r.dataset.theme='latte';b.textContent='Switch to dark theme';b.setAttribute('aria-pressed','true')}
+});
+</script>
+</body>
+</html>

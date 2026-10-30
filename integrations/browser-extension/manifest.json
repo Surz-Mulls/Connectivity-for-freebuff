@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Continuity — send tab to phone",
+  "version": "0.1.0",
+  "description": "Sends the current http(s) tab to your paired Android phone through the local Continuity daemon.",
+  "permissions": ["activeTab", "nativeMessaging", "contextMenus", "notifications", "tabs"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_title": "Send tab to phone",
+    "default_popup": "popup.html"
+  },
+  "icons": {}
+}

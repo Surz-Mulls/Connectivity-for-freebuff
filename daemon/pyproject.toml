@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "continuityd"
+version = "0.1.0"
+description = "Local-first Android/Linux continuity daemon (pairing, clipboard, files, notifications, DeX workspace)"
+requires-python = ">=3.11"
+license = { text = "GPL-3.0-only" }
+dependencies = [
+  "cryptography>=42",
+  "zeroconf>=0.132",
+  "qrcode>=7.4",
+  "dbus-next>=0.2.3; platform_system == 'Linux'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+continuityd = "continuityd.cli:main"
+continuityctl = "continuityd.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["continuityd*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose owns the in-app palette (generated from design/tokens.json); this window theme only
+         removes the platform action bar and sets the dark Catppuccin background. -->
+    <style name="Theme.Continuity" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">#1e1e2e</item>
+        <item name="android:statusBarColor">#181825</item>
+        <item name="android:navigationBarColor">#181825</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
