@@ -1,20 +1,29 @@
 {
-  "updated": "2026-10-30T00:00:00Z",
-  "stage": "release",
-  "module": "handoff-pushed",
+  "schema": "continuity.status/1",
+  "project": "Connectivity for FreeBuff",
+  "stage": "audit-fixes",
+  "module": "release-blocked",
   "state": "waiting-user",
-  "last_commit": "2505682",
+  "last_commit": "59360a9 (audit baseline; this commit records the fix pass)",
+  "branch": "FreeBuff",
   "tests": {
-    "pass": 63,
-    "fail": 0,
-    "blocked": 21,
-    "not_verified": 28
+    "python": "70 passed",
+    "android_jvm": "17 passed",
+    "instrumented": "blocked: no device or emulator",
+    "hardware": "blocked: no phone",
+    "ci": "not run: workflow added, needs GitHub Actions"
+  },
+  "artifacts": {
+    "android": "dist/continuity-android-debug.apk (debug-signed, not device-tested)",
+    "portable": "dist/continuity-linux-x86_64-portable.tar.zst",
+    "arch": "dist/continuity-linux-x86_64.pkg.tar.zst (not install-tested)",
+    "appimage": "not built: appimagetool failed, see artifacts/logs/appimage.log"
   },
   "needs_user": [
-    "Install artifacts/android/app-debug.apk on the Mi 12 and run journeys B01-B12 in docs/batch-test-matrix.md",
-    "Run the KDE Connect remote-input baseline (docs/baseline-remote-input.md) and paste the evidence table",
-    "Install Qt 6 (pacman -S qt6-declarative) to launch desktop/run-continuity.sh (journey D01)",
-    "Include the Quickshell panel and report which import/API names your installed version needs"
+    "Add a GitHub token with repo scope (gh auth login or GH_TOKEN) so the pre-release and its assets can be published",
+    "Provide a host with root or a container to bundle Qt 6 and produce the AppImage",
+    "Install dist/continuity-android-debug.apk on the Mi 12 and run pairing/reconnect/transfer journeys",
+    "Run the Quickshell panel and Dolphin service menu on Hyprland/KDE and report API mismatches"
   ],
-  "notes": "Branch FreeBuff pushed and verified on GitHub. Daemon 63 tests passing, theme drift clean, debug APK built (29,153,659 bytes, sha256 76295cbc...47c8). Phone/Qt/Quickshell rows remain blocked or unverified and are labelled that way in docs/feature-matrix.md."
+  "notes": "P0 (identity permissions, ECDSA codec) and P1 (handshake binding, transfers, token handling, Dolphin exec, permissions, toolchain) are fixed with regression tests. No release was published because no GitHub API credential is available; nothing is claimed as device-tested."
 }

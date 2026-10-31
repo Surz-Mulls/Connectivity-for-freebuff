@@ -59,6 +59,7 @@ class ContinuitySession(
     private var output: OutputStream? = null
     private val pending = ConcurrentHashMap<String, ArrayBlockingQueue<JSONObject>>()
     private var thread: Thread? = null
+    private var tlsFingerprint: String = ""
 
     fun start() {
         thread = Thread({ run() }, "continuity-session").apply { isDaemon = true }.also { it.start() }
@@ -75,6 +76,7 @@ class ContinuitySession(
             val ssl = socket as SSLSocket
             ssl.soTimeout = 30_000
             ssl.startHandshake()
+            tlsFingerprint = tlsPeerFingerprint()
             input = ssl.inputStream
             output = ssl.outputStream
             if (initiator) clientHandshake() else serverHandshake()
@@ -103,15 +105,24 @@ class ContinuitySession(
             )
         )
         val hello = readJson() ?: throw IOException("no hello")
+        Protocol.requireSupportedVersion(hello)
         val body = hello.getJSONObject("body")
+        require(body.optInt("proto", 0) == Protocol.VERSION) { "protocol.version" }
         val clientNonce = Protocol.unb64(body.getString("nonce"))
         val certDer = Protocol.unb64(body.getString("cert"))
         val signature = Protocol.unb64(body.getString("sig"))
-        if (!Identity.verify(certDer, clientNonce + serverNonce, signature)) {
+        val fingerprint = Identity.sha256Hex(certDer)
+        if (body.optString("tls") != identity.fingerprint) {
+            throw SecurityException("TLS channel is not bound to this identity")
+        }
+        val transcript = Handshake.transcript(
+            "client", fingerprint, identity.fingerprint, clientNonce, serverNonce,
+            identity.fingerprint
+        )
+        if (!Identity.verify(certDer, transcript, signature)) {
             throw SecurityException("client signature invalid")
         }
         val device = body.getJSONObject("device")
-        val fingerprint = Identity.sha256Hex(certDer)
         if (store.isRevoked(fingerprint)) {
             sendError("identity.revoked", "this device was revoked")
             throw SecurityException("revoked peer")
@@ -127,7 +138,17 @@ class ContinuitySession(
                     .put("trusted", trusted)
                     .put("device", deviceInfo())
                     .put("cert", Protocol.b64(identity.certDer))
-                    .put("sig", Protocol.b64(identity.sign(serverNonce + clientNonce)))
+                    .put(
+                        "sig", Protocol.b64(
+                            identity.sign(
+                                Handshake.transcript(
+                                    "server", fingerprint, identity.fingerprint,
+                                    clientNonce, serverNonce, identity.fingerprint
+                                )
+                            )
+                        )
+                    )
+                    .put("tls", identity.fingerprint)
                     .put("sas", sas ?: JSONObject.NULL)
             )
         )
@@ -169,10 +190,16 @@ class ContinuitySession(
 
     private fun clientHandshake() {
         val challenge = readJson() ?: throw IOException("no hello.challenge")
+        Protocol.requireSupportedVersion(challenge)
         val body = challenge.getJSONObject("body")
+        require(body.optInt("proto", 0) == Protocol.VERSION) { "protocol.version" }
         val serverNonce = Protocol.unb64(body.getString("nonce"))
         val serverCert = Protocol.unb64(body.getString("cert"))
         val serverFingerprint = Identity.sha256Hex(serverCert)
+        if (tlsFingerprint.isEmpty()) throw SecurityException("no TLS peer certificate")
+        if (tlsFingerprint != serverFingerprint) {
+            throw SecurityException("TLS certificate is not the identity presented in-band")
+        }
         val expected = store.expectedFingerprint()
         if (expected != null && expected != serverFingerprint) {
             throw SecurityException("desktop fingerprint does not match the pin")
@@ -187,15 +214,34 @@ class ContinuitySession(
                     .put("nonce", Protocol.b64(clientNonce))
                     .put("device", deviceInfo())
                     .put("cert", Protocol.b64(identity.certDer))
-                    .put("sig", Protocol.b64(identity.sign(clientNonce + serverNonce)))
+                    .put(
+                        "sig", Protocol.b64(
+                            identity.sign(
+                                Handshake.transcript(
+                                    "client", identity.fingerprint, serverFingerprint,
+                                    clientNonce, serverNonce, tlsFingerprint
+                                )
+                            )
+                        )
+                    )
+                    .put("tls", tlsFingerprint)
             )
         )
         val ok = readJson() ?: throw IOException("no hello.ok")
+        Protocol.requireSupportedVersion(ok)
         if (ok.getString("type") == Protocol.Msg.ERROR) {
             throw SecurityException(ok.getJSONObject("body").optString("code"))
         }
-        if (!Identity.verify(serverCert, serverNonce + clientNonce,
-                Protocol.unb64(ok.getJSONObject("body").getString("sig")))
+        val okBody = ok.getJSONObject("body")
+        if (okBody.optString("tls") != serverFingerprint) {
+            throw SecurityException("TLS binding missing from hello.ok")
+        }
+        val expectedTranscript = Handshake.transcript(
+            "server", identity.fingerprint, serverFingerprint, clientNonce, serverNonce,
+            tlsFingerprint
+        )
+        if (!Identity.verify(serverCert, expectedTranscript,
+                Protocol.unb64(okBody.getString("sig")))
         ) {
             throw SecurityException("server signature invalid")
         }
@@ -235,6 +281,7 @@ class ContinuitySession(
             val (type, payload) = frame
             if (type == Protocol.TYPE_JSON) {
                 val msg = JSONObject(String(payload))
+                Protocol.requireSupportedVersion(msg)
                 val replyTo = msg.optString("reply_to", "")
                 if (replyTo.isNotEmpty()) {
                     pending.remove(replyTo)?.offer(msg)
@@ -299,6 +346,12 @@ class ContinuitySession(
             if (frame.first == Protocol.TYPE_JSON) return JSONObject(String(frame.second))
         }
     }
+
+    private fun tlsPeerFingerprint(): String = runCatching {
+        val ssl = socket as SSLSocket
+        val cert = ssl.session.peerCertificates.firstOrNull() as? java.security.cert.X509Certificate
+        cert?.let { Identity.sha256Hex(it.encoded) } ?: ""
+    }.getOrDefault("")
 
     private fun deviceInfo(): JSONObject = JSONObject()
         .put("id", identity.deviceId)

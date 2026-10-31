@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import os
+import string
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -164,7 +165,7 @@ class TransferService:
         if size < 0 or size > MAX_FILE_SIZE:
             raise ProtocolError("limit.exceeded", "invalid file size")
         digest = str(body.get("sha256", ""))
-        if len(digest) != 64:
+        if len(digest) != 64 or any(ch not in string.hexdigits for ch in digest):
             raise ProtocolError("protocol.json", "invalid sha256")
         transfer_id = str(body.get("transfer_id", ""))
         if not transfer_id or len(transfer_id) > 64:

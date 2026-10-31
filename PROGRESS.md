@@ -5,6 +5,19 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-10-31 — audit pass (prompt v2)
+
+- Re-scanned the tree at `59360a9`. Findings A–K reproduced in the current source.
+- P0: removed `setReadable(false, false)` (C) and replaced the fixed-offset DER parser with a
+  structural codec (D). 64 shared vectors + 17 JVM tests.
+- P1: protocol v2 transcript with TLS-certificate binding, envelope version enforcement, real
+  inbound + relay tests (A/B); Android transfer hardening (E); bearer token out of argv, 0600
+  diagnostics, private runtime dir (G); Dolphin exec without a shell (H); `READ_MEDIA_IMAGES`
+  removed (F); tracked bootstrap script, Gradle wrapper with checksum, LICENSE (J).
+- Built `dist/continuity-android-debug.apk`; portable and Arch archives built and inspected.
+  AppImage failed (no Qt/mksquashfs on this host) — see `artifacts/logs/appimage.log`.
+- Pre-release **not** published: no GitHub API token in this environment.
+
 ## 2026-10-30T03:40Z — M6 branch pushed
 
 - Branch `FreeBuff` pushed to `Surz-Mulls/Connectivity-for-freebuff` (`2505682`).

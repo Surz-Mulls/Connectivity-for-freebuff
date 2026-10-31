@@ -1,0 +1,85 @@
+name: ci
+
+on:
+  push:
+    branches: [FreeBuff]
+  pull_request:
+    branches: [FreeBuff]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install daemon
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e daemon pytest pytest-asyncio
+      - name: Unit and network tests
+        run: python -m pytest daemon/tests -q
+      - name: Diagnostics smoke test
+        run: |
+          python -m continuityd.cli --help >/dev/null 2>&1 || continuityd --help
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Unit tests (JVM)
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --console=plain
+      - name: Assemble debug APK
+        working-directory: android
+        run: ./gradlew :app:assembleDebug --no-daemon --console=plain
+      - name: Rename and checksum
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist/continuity-android-debug.apk
+          cd dist && sha256sum continuity-android-debug.apk > continuity-android-debug.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: dist/continuity-android-debug.apk*
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Qt and packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            qt6-declarative-dev qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+            qt6-qmltooling-plugins zstd squashfs-tools
+      - name: Build Linux formats
+        run: bash scripts/package-linux.sh
+      - name: Verify artifacts
+        run: |
+          test -s dist/continuity-linux-x86_64.AppImage
+          test -s dist/continuity-linux-x86_64.pkg.tar.zst
+          test -s dist/continuity-linux-x86_64-portable.tar.zst
+          cd dist && sha256sum -c SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-deliverables
+          path: |
+            dist/continuity-linux-x86_64.AppImage
+            dist/continuity-linux-x86_64.pkg.tar.zst
+            dist/continuity-linux-x86_64-portable.tar.zst
+            dist/SHA256SUMS
+            dist/BUILD-MANIFEST.json

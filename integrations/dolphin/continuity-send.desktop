@@ -10,4 +10,6 @@ X-KDE-Submenu=Continuity
 [Desktop Action sendToPhone]
 Name=Send to phone
 Icon=phone
-Exec=sh -c 'exec "$HOME/.local/share/continuity/integrations/continuity-send.sh" %F'
+# install.sh rewrites @HELPER@ to the absolute helper path. No shell, no quoting hazard: the files
+# are handed to the script as separate arguments, never interpolated into a command string.
+Exec=@HELPER@ %F

@@ -159,7 +159,9 @@ class DeviceManager:
         await self._run_session(session, reader, writer)
 
     async def _run_session(self, session: Session, reader, writer) -> None:
-        peer = await writer.get_extra_info("peername") if writer else None
+        # StreamWriter.get_extra_info() is synchronous. Awaiting it raised TypeError on every
+        # inbound connection, aborting the session before a single frame was read.
+        peer = writer.get_extra_info("peername") if writer else None
         address = f"{peer[0]}:{peer[1]}" if peer else ""
         task = asyncio.create_task(session.run(reader, writer))
         self.metrics["connections_total"] += 1

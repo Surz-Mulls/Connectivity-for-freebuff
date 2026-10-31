@@ -20,6 +20,7 @@ ApplicationWindow {
     property var pendingTransfer: null
     property string apiToken: ""
     property int apiPort: 0
+    property string apiConfig: ""
     property string lastError: ""
     property string toast: ""
 
@@ -89,10 +90,28 @@ ApplicationWindow {
         root.pendingTransfer = offer
     }
 
+    // The daemon writes {"port":…,"token":…} to a 0600 runtime file. Reading it here keeps the
+    // bearer token out of argv, where any local process could read it from /proc/<pid>/cmdline.
+    function loadApiConfig(path) {
+        var xhr = new XMLHttpRequest()
+        try {
+            xhr.open("GET", "file://" + path, false)
+            xhr.send()
+            var data = JSON.parse(xhr.responseText)
+            apiPort = parseInt(data.port)
+            apiToken = String(data.token)
+        } catch (e) {
+            lastError = "cannot read the daemon token file: " + e
+        }
+    }
+
     Component.onCompleted: {
-        apiPort = parseInt(argValue("--api-port="))
-        apiToken = argValue("--api-token=")
-        if (!apiPort || !apiToken)
+        apiConfig = argValue("--api-config=")
+        if (apiConfig !== "")
+            loadApiConfig(apiConfig)
+        else
+            apiPort = parseInt(argValue("--api-port="))
+        if (!apiPort || apiToken === "")
             lastError = "No daemon token. Start the daemon, then launch with desktop/run-continuity.sh."
         refresh()
     }

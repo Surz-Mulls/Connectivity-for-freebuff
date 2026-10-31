@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Launch the QML desktop client against a running daemon.
-# The bearer token is read from the 0600 runtime file and passed as an argument; it is never
-# written into the repository or into a log.
+# Only the *path* of the 0600 runtime token file is passed to QML, never the bearer token itself:
+# command lines are visible in /proc/<pid>/cmdline to other local users, file permissions are not.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME="${XDG_RUNTIME_DIR:-/tmp}/continuity"
@@ -12,16 +12,9 @@ if [ ! -r "$TOKEN_FILE" ]; then
   exit 1
 fi
 
-read -r PORT TOKEN < <(python3 - "$TOKEN_FILE" <<'PY'
-import json, sys
-data = json.load(open(sys.argv[1]))
-print(data["port"], data["token"])
-PY
-)
-
 for candidate in qml6 qml /usr/lib/qt6/bin/qml pyside6-qml; do
   if command -v "$candidate" >/dev/null 2>&1; then
-    exec "$candidate" "$HERE/qml/Main.qml" -- --api-port="$PORT" --api-token="$TOKEN"
+    exec "$candidate" "$HERE/qml/Main.qml" -- --api-config="$TOKEN_FILE"
   fi
 done
 

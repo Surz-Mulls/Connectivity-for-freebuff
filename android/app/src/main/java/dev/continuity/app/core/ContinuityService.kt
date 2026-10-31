@@ -285,48 +285,136 @@ class ContinuityService : Service() {
         }
     }
 
+    private data class Incoming(
+        val id: String,
+        val name: String,
+        val size: Long,
+        val digest: String,
+        val staging: File,
+        val destination: File,
+        var written: Long = 0L
+    )
+
+    private val incoming = java.util.concurrent.ConcurrentHashMap<String, Incoming>()
+    private val transferLock = Any()
+
     private fun handleBlob(session: ContinuitySession, header: JSONObject, data: ByteArray) {
         if (header.optString("type") != Protocol.Msg.FILE_CHUNK) return
         val id = header.optString("transfer_id")
-        val target = chunkBuffers[id] ?: return
-        val offset = header.optLong("offset", -1)
-        if (offset != target.length()) {
-            session.sendError("protocol.json", "out-of-order chunk")
+        val transfer = incoming[id]
+        if (transfer == null) {
+            session.sendError("protocol.unsafe", "chunk for an unknown transfer")
             return
         }
-        target.appendBytes(data)
+        synchronized(transferLock) {
+            if (header.optLong("offset", -1L) != transfer.written) {
+                session.sendError("protocol.json", "out-of-order chunk")
+                return
+            }
+            if (data.isEmpty() || data.size > Protocol.CHUNK_SIZE) {
+                session.sendError("limit.exceeded", "invalid chunk size")
+                return
+            }
+            if (transfer.written + data.size > transfer.size) {
+                session.sendError("limit.exceeded", "transfer exceeds the offered size")
+                return
+            }
+            try {
+                java.io.FileOutputStream(transfer.staging, true).use { it.write(data) }
+            } catch (exc: java.io.IOException) {
+                session.sendError("internal", "cannot write the staging file")
+                return
+            }
+            transfer.written += data.size
+        }
     }
+
+    private fun rejectOffer(id: String, reason: String): JSONObject = JSONObject()
+        .put("transfer_id", id).put("offset", 0).put("accept", false).put("reason", reason)
 
     private fun acceptOffer(body: JSONObject): JSONObject {
         val id = body.optString("transfer_id")
-        val name = body.optString("name").replace("/", "_").replace("\\", "_")
-        if (id.isEmpty() || name.isEmpty() || name.startsWith(".")) {
-            return JSONObject().put("transfer_id", id).put("offset", 0).put("accept", false)
+        if (!TransferPolicy.isValidTransferId(id)) return rejectOffer(id, "invalid transfer id")
+        if (!store.filesEnabled || store.privacyMode) return rejectOffer(id, "file transfer disabled")
+        val name = TransferPolicy.safeName(body.optString("name"))
+            ?: return rejectOffer(id, "unsafe file name")
+        val size = body.optLong("size", -1L)
+        if (!TransferPolicy.isValidSize(size)) return rejectOffer(id, "invalid size")
+        val digest = body.optString("sha256", "")
+        if (!TransferPolicy.isValidDigest(digest)) return rejectOffer(id, "invalid sha256")
+
+        incoming[id]?.let { existing ->
+            if (existing.size != size || !existing.digest.equals(digest, true)) {
+                return rejectOffer(id, "transfer id reused")
+            }
+            return JSONObject().put("transfer_id", id).put("offset", existing.written)
+                .put("accept", true)
         }
-        if (!store.clipboardEnabled || store.privacyMode) {
-            return JSONObject().put("transfer_id", id).put("offset", 0).put("accept", false)
+
+        synchronized(transferLock) {
+            if (incoming.size >= TransferPolicy.MAX_CONCURRENT) {
+                return rejectOffer(id, "too many concurrent transfers")
+            }
+            val root = receiveDir.canonicalFile
+            root.mkdirs()
+            if (!root.isDirectory) return rejectOffer(id, "receive directory unavailable")
+            val destination = TransferPolicy.uniqueDestination(root, name)
+                ?: return rejectOffer(id, "no free destination name")
+            val staging = File(root, ".${destination.name}.$id.part")
+            if (!TransferPolicy.isInside(root, staging)) return rejectOffer(id, "path escape")
+            try {
+                if (staging.exists()) staging.delete()
+                if (!staging.createNewFile()) error("cannot create staging file")
+            } catch (exc: java.io.IOException) {
+                return rejectOffer(id, "cannot create staging file")
+            }
+            incoming[id] = Incoming(id, name, size, digest.lowercase(), staging, destination)
+            AppState.note("incoming file: $name (${size} bytes)")
+            return JSONObject().put("transfer_id", id).put("offset", 0).put("accept", true)
         }
-        val target = File(receiveDir, "${id.take(8)}-$name")
-        runCatching { target.writeBytes(ByteArray(0)) }
-        chunkBuffers[id] = target
-        return JSONObject().put("transfer_id", id).put("offset", 0).put("accept", true)
+    }
+
+    private fun failTransfer(id: String, transfer: Incoming?, error: String): JSONObject {
+        transfer?.staging?.delete()
+        return JSONObject().put("transfer_id", id).put("ok", false).put("error", error)
     }
 
     private fun finishTransfer(body: JSONObject): JSONObject {
         val id = body.optString("transfer_id")
-        val file = chunkBuffers.remove(id)
+        val transfer = incoming.remove(id)
             ?: return JSONObject().put("transfer_id", id).put("ok", false)
                 .put("error", "unknown transfer")
-        val expected = body.optString("sha256", "")
-        val digest = MessageDigest.getInstance("SHA-256").digest(file.readBytes())
-            .joinToString("") { "%02x".format(it) }
-        return if (expected.isNotEmpty() && digest != expected) {
-            file.delete()
-            JSONObject().put("transfer_id", id).put("ok", false)
-                .put("error", "integrity check failed")
-        } else {
-            JSONObject().put("transfer_id", id).put("ok", true).put("sha256", digest)
-                .put("path", file.absolutePath)
+        val claimed = body.optString("sha256", "")
+        if (claimed.isNotEmpty() && !claimed.equals(transfer.digest, true)) {
+            return failTransfer(id, transfer, "offered digest changed")
+        }
+        val measured = try {
+            TransferPolicy.digestOf(transfer.staging)
+        } catch (exc: java.io.IOException) {
+            return failTransfer(id, transfer, "cannot read the staging file")
+        }
+        if (measured.first != transfer.size || !measured.second.equals(transfer.digest, true)) {
+            return failTransfer(id, transfer, "size or checksum mismatch")
+        }
+        val root = receiveDir.canonicalFile
+        if (!TransferPolicy.isInside(root, transfer.staging)) {
+            return failTransfer(id, transfer, "staging file escaped the receive directory")
+        }
+        return try {
+            var destination = transfer.destination
+            if (destination.exists()) {
+                destination = TransferPolicy.uniqueDestination(root, transfer.name)
+                    ?: return failTransfer(id, transfer, "no free destination name")
+            }
+            java.nio.file.Files.move(
+                transfer.staging.toPath(), destination.toPath(),
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE
+            )
+            AppState.note("received ${destination.name}")
+            JSONObject().put("transfer_id", id).put("ok", true)
+                .put("sha256", measured.second).put("path", destination.absolutePath)
+        } catch (exc: java.io.IOException) {
+            failTransfer(id, transfer, "cannot finalize the file")
         }
     }
 
@@ -365,36 +453,77 @@ class ContinuityService : Service() {
                     if (sizeIndex >= 0) size = cursor.getLong(sizeIndex)
                 }
             }
-            val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return@launch
-            val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
-                .joinToString("") { "%02x".format(it) }
-            val accepted = session.request(
-                Protocol.Msg.FILE_OFFER,
-                JSONObject().put("transfer_id", java.util.UUID.randomUUID().toString())
-                    .put("name", name.takeLast(200)).put("size", bytes.size.toLong())
-                    .put("sha256", digest).put("mime", resolver.getType(uri) ?: "application/octet-stream")
-            )?.optJSONObject("body")
-            if (accepted == null || !accepted.optBoolean("accept", false)) {
-                note("desktop declined the file")
-                return@launch
+            // Stream to a private spool file while hashing: never load a whole file into memory.
+            val spool = File.createTempFile("outgoing-", ".part", cacheDir)
+            val digest = MessageDigest.getInstance("SHA-256")
+            var total = 0L
+            try {
+                val input = resolver.openInputStream(uri)
+                    ?: run { note("cannot read the selected file"); return@launch }
+                input.use { source ->
+                    java.io.FileOutputStream(spool).use { sink ->
+                        val buffer = ByteArray(Protocol.CHUNK_SIZE)
+                        while (true) {
+                            val read = source.read(buffer)
+                            if (read < 0) break
+                            total += read
+                            if (total > TransferPolicy.MAX_FILE_SIZE) {
+                                note("file is larger than the 8 GiB limit")
+                                return@launch
+                            }
+                            digest.update(buffer, 0, read)
+                            sink.write(buffer, 0, read)
+                        }
+                    }
+                }
+                val sha = digest.digest().joinToString("") { "%02x".format(it) }
+                val safeName = TransferPolicy.safeName(name) ?: "shared-file"
+                val accepted = session.request(
+                    Protocol.Msg.FILE_OFFER,
+                    JSONObject().put("transfer_id", java.util.UUID.randomUUID().toString())
+                        .put("name", safeName).put("size", total)
+                        .put("sha256", sha)
+                        .put("mime", resolver.getType(uri) ?: "application/octet-stream")
+                )?.optJSONObject("body")
+                if (accepted == null || !accepted.optBoolean("accept", false)) {
+                    note("desktop declined the file")
+                    return@launch
+                }
+                val transferId = accepted.optString("transfer_id")
+                var offset = accepted.optLong("offset", 0L)
+                if (offset < 0 || offset > total) {
+                    note("desktop sent an invalid resume offset")
+                    return@launch
+                }
+                java.io.FileInputStream(spool).use { stream ->
+                    stream.channel.position(offset)
+                    while (offset < total) {
+                        val want = minOf(Protocol.CHUNK_SIZE.toLong(), total - offset).toInt()
+                        val chunk = ByteArray(want)
+                        var read = 0
+                        while (read < want) {
+                            val n = stream.read(chunk, read, want - read)
+                            if (n < 0) break
+                            read += n
+                        }
+                        if (read <= 0) break
+                        session.sendBlob(
+                            JSONObject().put("type", Protocol.Msg.FILE_CHUNK)
+                                .put("transfer_id", transferId).put("offset", offset),
+                            if (read == want) chunk else chunk.copyOf(read)
+                        )
+                        offset += read
+                    }
+                }
+                val result = session.request(
+                    Protocol.Msg.FILE_DONE,
+                    JSONObject().put("transfer_id", transferId).put("sha256", sha),
+                    timeoutMs = 120_000
+                )?.optJSONObject("body")
+                note(if (result?.optBoolean("ok") == true) "file sent" else "file transfer failed")
+            } finally {
+                spool.delete()
             }
-            val transferId = accepted.optString("transfer_id")
-            var offset = accepted.optInt("offset", 0)
-            while (offset < bytes.size) {
-                val end = minOf(offset + 256 * 1024, bytes.size)
-                session.sendBlob(
-                    JSONObject().put("type", Protocol.Msg.FILE_CHUNK)
-                        .put("transfer_id", transferId).put("offset", offset),
-                    bytes.copyOfRange(offset, end)
-                )
-                offset = end
-            }
-            val result = session.request(
-                Protocol.Msg.FILE_DONE,
-                JSONObject().put("transfer_id", transferId).put("sha256", digest),
-                timeoutMs = 120_000
-            )?.optJSONObject("body")
-            note(if (result?.optBoolean("ok") == true) "file sent" else "file transfer failed")
         }
     }
 

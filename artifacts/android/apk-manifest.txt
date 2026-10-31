@@ -1,0 +1,13 @@
+artifact: dist/continuity-android-debug.apk
+built_utc: 2026-10-31T08:05:53Z
+size_bytes: 29277811
+sha256: 8287bb51754d382ba2dfea2b0cc559fb6440e43b0e96e101d188474aed857df4
+package_id: dev.continuity.app
+version_name: 0.1.0
+version_code: 1
+min_sdk: 33 (Android 13)
+target_sdk: 35 (Android 15)
+compile_sdk: 35
+jdk: openjdk version "21.0.13" 2026-10-20 LTS
+gradle: Gradle 8.11.1
+signing: debug (Android Gradle Plugin debug keystore; NOT release signed)

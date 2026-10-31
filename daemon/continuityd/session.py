@@ -72,6 +72,37 @@ def _unb64(value: str, limit: int = 64 * 1024) -> bytes:
     return raw
 
 
+HANDSHAKE_LABEL = b"continuity/handshake/v2\x00"
+
+
+def _lp(value: bytes) -> bytes:
+    if len(value) > 0xFFFF:
+        raise SessionError("protocol.json", "handshake field too large")
+    return len(value).to_bytes(2, "big") + value
+
+
+def handshake_transcript(role: str, initiator_fpr: str, responder_fpr: str,
+                         initiator_nonce: bytes, responder_nonce: bytes,
+                         tls_fpr: str) -> bytes:
+    """Signed, length-prefixed transcript bound to roles, identities and the TLS channel.
+
+    ``tls_fpr`` is the SHA-256 of the certificate the *signer* actually saw on its TLS
+    connection. A TLS-terminating relay cannot produce a matching signature for this
+    transcript: the certificate it presents to the client is not the identity named in-band,
+    so the client aborts before signing (and the server rejects a ``tls`` field that does not
+    name its own certificate). Length prefixes keep every field unambiguous.
+    """
+    return b"".join([
+        HANDSHAKE_LABEL,
+        _lp(role.encode()),
+        _lp(initiator_fpr.encode()),
+        _lp(responder_fpr.encode()),
+        _lp(initiator_nonce),
+        _lp(responder_nonce),
+        _lp(tls_fpr.encode()),
+    ])
+
+
 @dataclass
 class Peer:
     device: dict
@@ -109,6 +140,8 @@ class Session:
     blob_handler: BlobHandler | None = None
     initiator: bool = False
     expected_fingerprint: str | None = None
+    #: SHA-256 of the certificate seen on the TLS connection (empty if the peer sent none)
+    tls_peer_fpr: str = ""
     #: async callback (peer) -> bool; wired to the UI/IPC in the daemon, auto-approve in tests
     pair_approver: Callable[["Peer"], Awaitable[bool]] | None = None
     capabilities: list[str] = field(default_factory=list)
@@ -131,6 +164,7 @@ class Session:
     # ------------------------------------------------------------------ entry points
     async def run(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.reader, self.writer = reader, writer
+        self.tls_peer_fpr = self._tls_peer_fingerprint()
         try:
             async with asyncio.timeout(HANDSHAKE_TIMEOUT):
                 if self.initiator:
@@ -166,6 +200,15 @@ class Session:
                 self.writer.close()
                 await self.writer.wait_closed()
 
+    def _tls_peer_fingerprint(self) -> str:
+        if not self.writer:
+            return ""
+        ssl_object = self.writer.get_extra_info("ssl_object")
+        if ssl_object is None:
+            return ""
+        cert = ssl_object.getpeercert(binary_form=True)
+        return fingerprint_of_der(cert) if cert else ""
+
     # ------------------------------------------------------------------ handshake
     async def _server_handshake(self) -> None:
         assert self.reader and self.writer
@@ -185,10 +228,17 @@ class Session:
         client_nonce = _unb64(body["nonce"], 64)
         cert_der = _unb64(body["cert"])
         signature = _unb64(body["sig"], 128)
-        if not verify_signature(cert_der, client_nonce + server_nonce, signature):
+        fingerprint = fingerprint_of_der(cert_der)
+        # The client must have seen *our* certificate on the TLS connection. A relay that
+        # terminates TLS presents its own certificate and reports it here, so it fails.
+        if body.get("tls") != self.identity.fingerprint:
+            raise SessionError("identity.mismatch",
+                               "TLS channel is not bound to this identity")
+        transcript = handshake_transcript("client", fingerprint, self.identity.fingerprint,
+                                         client_nonce, server_nonce, str(body.get("tls", "")))
+        if not verify_signature(cert_der, transcript, signature):
             raise SessionError("identity.mismatch", "client signature invalid")
         device = validate_device(body["device"])
-        fingerprint = fingerprint_of_der(cert_der)
         entry = self.trust.get(fingerprint)
         if entry and entry.revoked:
             raise SessionError("identity.revoked", "this device was revoked")
@@ -201,7 +251,10 @@ class Session:
             "trusted": trusted,
             "device": self.identity.info("linux", self.capabilities),
             "cert": _b64(self.identity.cert_der),
-            "sig": _b64(self.identity.sign(server_nonce + client_nonce)),
+            "sig": _b64(self.identity.sign(handshake_transcript(
+                "server", fingerprint, self.identity.fingerprint,
+                client_nonce, server_nonce, self.identity.fingerprint))),
+            "tls": self.identity.fingerprint,
             "sas": sas,
         }))
         if not trusted:
@@ -247,6 +300,11 @@ class Session:
         server_nonce = _unb64(body["nonce"], 64)
         server_cert = _unb64(body["cert"])
         server_fingerprint = fingerprint_of_der(server_cert)
+        if not self.tls_peer_fpr:
+            raise SessionError("identity.mismatch", "no TLS peer certificate")
+        if self.tls_peer_fpr != server_fingerprint:
+            raise SessionError("identity.mismatch",
+                               "TLS certificate is not the identity presented in-band")
         if self.expected_fingerprint and server_fingerprint != self.expected_fingerprint:
             raise SessionError("identity.mismatch", "peer certificate does not match the pin")
         server_device = validate_device(body["device"])
@@ -256,7 +314,10 @@ class Session:
             "nonce": _b64(client_nonce),
             "device": self.identity.info("linux", self.capabilities),
             "cert": _b64(self.identity.cert_der),
-            "sig": _b64(self.identity.sign(client_nonce + server_nonce)),
+            "sig": _b64(self.identity.sign(handshake_transcript(
+                "client", self.identity.fingerprint, server_fingerprint,
+                client_nonce, server_nonce, self.tls_peer_fpr))),
+            "tls": self.tls_peer_fpr,
         }))
         ok = await self._read_json(HANDSHAKE_TIMEOUT)
         if ok["type"] == Msg.ERROR:
@@ -264,8 +325,12 @@ class Session:
             raise SessionError(code, ok["body"].get("message", "peer rejected the session"))
         if ok["type"] != Msg.HELLO_OK:
             raise SessionError("protocol.unsupported", "expected hello.ok")
-        if not verify_signature(server_cert, server_nonce + client_nonce,
-                                _unb64(ok["body"]["sig"], 128)):
+        if ok["body"].get("tls") != server_fingerprint:
+            raise SessionError("identity.mismatch", "TLS binding missing from hello.ok")
+        if not verify_signature(server_cert, handshake_transcript(
+                "server", self.identity.fingerprint, server_fingerprint,
+                client_nonce, server_nonce, self.tls_peer_fpr),
+                _unb64(ok["body"]["sig"], 128)):
             raise SessionError("identity.mismatch", "server signature invalid")
         sas = derive_sas(self.identity.fingerprint, server_fingerprint, client_nonce, server_nonce)
         trusted = self.trust.is_trusted(server_fingerprint)
@@ -482,6 +547,8 @@ async def connect(host: str, port: int) -> tuple[asyncio.StreamReader, asyncio.S
 
 
 def advertised_capabilities(settings: Settings) -> list[str]:
+    # Only capabilities that actually have a handler are advertised: claiming media/camera/sync
+    # support that answers capability.denied would mislead the peer and the UI.
     caps = ["status.battery", "find.ring", "find.ping", "handoff.send", "handoff.open"]
     if settings.clipboard_enabled and settings.clipboard_direction != "off":
         caps += ["clipboard.read", "clipboard.write"]
@@ -493,7 +560,6 @@ def advertised_capabilities(settings: Settings) -> list[str]:
         caps += ["notifications.mirror", "notifications.dismiss", "notifications.reply"]
     if settings.sync_folders:
         caps.append("sync.folders")
-    caps += ["media.state", "media.control", "camera.capture", "dex.session"]
     if settings.adb_enabled:
         caps.append("dex.session")
     return sorted(set(caps))

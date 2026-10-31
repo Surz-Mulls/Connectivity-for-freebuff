@@ -302,7 +302,8 @@ def export(report: DiagnosticsReport, out_dir: Path) -> dict:
     json_path.write_text(json.dumps(report.to_dict(), indent=2))
     md_path.write_text(report.to_markdown())
     for path in (json_path, md_path):
-        os.chmod(path, 0o644)
+        # Reports can contain device names, paths and fingerprints: owner-only, never world-readable.
+        os.chmod(path, 0o600)
     return {"json": str(json_path), "markdown": str(md_path)}
 
 

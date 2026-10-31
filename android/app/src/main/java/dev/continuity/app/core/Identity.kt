@@ -2,8 +2,8 @@ package dev.continuity.app.core
 
 import android.content.Context
 import org.bouncycastle.asn1.x500.X500Name
-import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
 import java.io.File
@@ -24,6 +24,10 @@ import java.util.UUID
  * Device identity: self-signed ECDSA P-256 certificate, generated once and stored in the app's
  * private files directory. The SHA-256 fingerprint of the DER certificate is the device identity;
  * the private key never leaves this sandbox and is never exported by diagnostics.
+ *
+ * The identity directory lives under `Context.filesDir`, which Android already makes unreadable to
+ * other apps. Do **not** call `File.setReadable(false, false)` here: it clears the owner's read bit
+ * too, so every later start failed with `Permission denied` when loading the key.
  */
 class Identity(
     val deviceId: String,
@@ -39,7 +43,7 @@ class Identity(
         val signer = Signature.getInstance("SHA256withECDSA")
         signer.initSign(keyPair.private)
         signer.update(data)
-        return derToRaw(signer.sign())
+        return EcdsaCodec.derToRaw(signer.sign())
     }
 
     fun publicKey(): PublicKey = keyPair.public
@@ -47,31 +51,40 @@ class Identity(
     fun privateKey(): PrivateKey = keyPair.private
 
     companion object {
-        private const val PREFS = "continuity-identity"
+        private const val CERT_FILE = "device-cert.der"
+        private const val KEY_FILE = "device-key.der"
+        private const val META_FILE = "device.json"
 
         fun sha256Hex(bytes: ByteArray): String =
             MessageDigest.getInstance("SHA-256").digest(bytes)
                 .joinToString("") { "%02x".format(it) }
 
-        fun loadOrCreate(context: Context, requestedName: String? = null): Identity {
+        fun loadOrCreate(context: Context, requestedName: String? = null): Identity =
+            loadOrCreate(File(context.filesDir, "identity"), requestedName ?: android.os.Build.MODEL)
+
+        /**
+         * JVM-testable overload. Reads an existing identity from [directory] or creates one there.
+         * The private key is written with the process default permissions; the containing directory
+         * is the security boundary.
+         */
+        fun loadOrCreate(directory: File, requestedName: String?): Identity {
             Security.removeProvider("BC")
             Security.addProvider(BouncyCastleProvider())
-            val dir = File(context.filesDir, "identity").apply { mkdirs() }
-            val certFile = File(dir, "device-cert.der")
-            val keyFile = File(dir, "device-key.der")
-            val metaFile = File(dir, "device.json")
+            directory.mkdirs()
+            val certFile = File(directory, CERT_FILE)
+            val keyFile = File(directory, KEY_FILE)
+            val metaFile = File(directory, META_FILE)
+
             if (certFile.exists() && keyFile.exists() && metaFile.exists()) {
                 val cert = java.security.cert.CertificateFactory
                     .getInstance("X.509")
                     .generateCertificate(certFile.inputStream()) as X509Certificate
-                val keySpec = java.security.spec.PKCS8EncodedKeySpec(keyFile.readBytes())
                 val privateKey: PrivateKey = java.security.KeyFactory
                     .getInstance("EC")
-                    .generatePrivate(keySpec)
-                val pubSpec = java.security.spec.X509EncodedKeySpec(
-                    cert.publicKey.encoded
-                )
-                val publicKey = java.security.KeyFactory.getInstance("EC").generatePublic(pubSpec)
+                    .generatePrivate(java.security.spec.PKCS8EncodedKeySpec(keyFile.readBytes()))
+                val publicKey = java.security.KeyFactory
+                    .getInstance("EC")
+                    .generatePublic(java.security.spec.X509EncodedKeySpec(cert.publicKey.encoded))
                 val meta = org.json.JSONObject(metaFile.readText())
                 return Identity(
                     meta.getString("device_id"),
@@ -81,13 +94,13 @@ class Identity(
                 )
             }
 
-            val name = (requestedName ?: android.os.Build.MODEL ?: "Android").take(64)
+            val name = (requestedName?.takeIf { it.isNotBlank() } ?: "Android").take(64)
             val deviceId = UUID.randomUUID().toString()
             val generator = KeyPairGenerator.getInstance("EC")
             generator.initialize(java.security.spec.ECGenParameterSpec("secp256r1"), SecureRandom())
             val keyPair = generator.generateKeyPair()
             val now = Date()
-            val subject = X500Name("CN=Continuity $name, O=Continuity")
+            val subject = X500Name("CN=Continuity ${name.replace(",", " ")}, O=Continuity")
             val builder = JcaX509v3CertificateBuilder(
                 subject,
                 BigInteger(64, SecureRandom()),
@@ -112,7 +125,6 @@ class Identity(
                     .put("created", now.toInstant().toString())
                     .toString()
             )
-            listOf(certFile, keyFile, metaFile).forEach { runCatching { it.setReadable(false, false) } }
             return Identity(deviceId, name, cert, keyPair)
         }
 
@@ -124,63 +136,10 @@ class Identity(
                 val verifier = Signature.getInstance("SHA256withECDSA")
                 verifier.initVerify(cert.publicKey)
                 verifier.update(data)
-                verifier.verify(rawToDer(signature))
+                verifier.verify(EcdsaCodec.rawToDer(signature))
             } catch (e: Exception) {
                 false
             }
-        }
-
-        private fun derToRaw(der: ByteArray): ByteArray {
-            var index = 0
-            require(der[index++] == 0x30.toByte()) { "not a DER sequence" }
-            index += lengthSize(der, index) + lengthBytes(der, indexOfLength(der, 1))
-            val rLength = der[index + 1].toInt()
-            val r = der.copyOfRange(index + 2, index + 2 + rLength)
-            index += 2 + rLength
-            val sLength = der[index + 1].toInt()
-            val s = der.copyOfRange(index + 2, index + 2 + sLength)
-            val raw = ByteArray(64)
-            copyFixed(r, raw, 0)
-            copyFixed(s, raw, 32)
-            return raw
-        }
-
-        private fun indexOfLength(der: ByteArray, start: Int): Int {
-            var i = start
-            if (der[i].toInt() and 0x80 != 0) i += der[i].toInt() and 0x7f
-            return i + 1
-        }
-
-        private fun lengthBytes(der: ByteArray, index: Int): Int =
-            if (der[index].toInt() and 0x80 != 0) der[index].toInt() and 0x7f else 0
-
-        private fun lengthSize(der: ByteArray, index: Int): Int = lengthBytes(der, index) - 1
-
-        private fun copyFixed(source: ByteArray, target: ByteArray, offset: Int) {
-            val value = BigInteger(1, source).toByteArray()
-            val trimmed = value.dropWhile { it == 0.toByte() }.toByteArray()
-            require(trimmed.size <= 32) { "ECDSA scalar too large" }
-            System.arraycopy(trimmed, 0, target, offset + 32 - trimmed.size, trimmed.size)
-        }
-
-        private fun rawToDer(raw: ByteArray): ByteArray {
-            require(raw.size == 64) { "raw signature must be 64 bytes" }
-            val r = BigInteger(1, raw.copyOfRange(0, 32))
-            val s = BigInteger(1, raw.copyOfRange(32, 64))
-            val rBytes = r.toByteArray()
-            val sBytes = s.toByteArray()
-            val total = 2 + rBytes.size + 2 + sBytes.size
-            val out = ByteArray(2 + total)
-            var i = 0
-            out[i++] = 0x30
-            out[i++] = total.toByte()
-            out[i++] = 0x02
-            out[i++] = rBytes.size.toByte()
-            rBytes.copyInto(out, i); i += rBytes.size
-            out[i++] = 0x02
-            out[i++] = sBytes.size.toByte()
-            sBytes.copyInto(out, i)
-            return out
         }
     }
 }

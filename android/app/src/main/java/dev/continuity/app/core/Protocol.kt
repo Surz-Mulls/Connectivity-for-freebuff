@@ -9,14 +9,15 @@ import java.util.Base64
 import java.util.UUID
 
 /**
- * Wire protocol v1 (see protocol/PROTOCOL.md). Frame: u32 length | u8 type | payload.
- * The 1 MiB cap is enforced before any buffer is allocated.
+ * Wire protocol v2 (see protocol/PROTOCOL.md). Frame: u32 length | u8 type | payload.
+ * The 1 MiB cap is enforced before any buffer is allocated. v1 is rejected, never downgraded.
  */
 object Protocol {
-    const val VERSION = 1
+    const val VERSION = 2
     const val MAX_PAYLOAD = 1 shl 20
     const val TYPE_JSON = 1
     const val TYPE_BLOB = 2
+    const val CHUNK_SIZE = 256 * 1024
 
     object Msg {
         const val HELLO_CHALLENGE = "hello.challenge"
@@ -167,4 +168,9 @@ object Protocol {
 
     fun error(code: String, message: String): JSONObject =
         JSONObject().put("code", code).put("message", message.take(512))
+
+    /** Every envelope must carry the supported version; there is no legacy fallback. */
+    fun requireSupportedVersion(envelope: JSONObject) {
+        require(envelope.optInt("v", 0) == VERSION) { "protocol.version: unsupported envelope" }
+    }
 }

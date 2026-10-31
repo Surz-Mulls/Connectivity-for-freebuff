@@ -32,3 +32,7 @@ build/
 .env
 .env.*
 !.env.example
+
+# release assets are published, not committed
+dist/
+artifacts/android/*.apk

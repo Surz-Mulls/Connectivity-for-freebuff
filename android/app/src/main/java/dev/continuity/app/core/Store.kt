@@ -48,6 +48,10 @@ class Store(context: Context) {
         get() = prefs.getBoolean("notifications_include_sensitive", false)
         set(value) = prefs.edit().putBoolean("notifications_include_sensitive", value).apply()
 
+    var filesEnabled: Boolean
+        get() = prefs.getBoolean("files_enabled", true)
+        set(value) = prefs.edit().putBoolean("files_enabled", value).apply()
+
     var privacyMode: Boolean
         get() = prefs.getBoolean("privacy_mode", false)
         set(value) = prefs.edit().putBoolean("privacy_mode", value).apply()

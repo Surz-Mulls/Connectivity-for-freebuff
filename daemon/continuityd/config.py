@@ -44,7 +44,9 @@ def state_dir() -> Path:
 def runtime_dir() -> Path:
     """Directory for the IPC socket. 0700 so only this user can connect."""
     base = os.environ.get("XDG_RUNTIME_DIR")
-    path = (Path(base) / APP) if base else (Path(tempfile.gettempdir()) / f"{APP}-{os.getuid()}")
+    # Never fall back to a world-writable /tmp: another local user could pre-create the directory
+    # and read the HTTP bearer token. Use a 0700 directory under the user's own state dir instead.
+    path = (Path(base) / APP) if base else (state_dir() / "run")
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(path, 0o700)
     return path
