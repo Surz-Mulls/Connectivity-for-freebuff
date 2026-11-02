@@ -5,6 +5,12 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-10-31 — published
+
+- Pre-release `v0.1.0-test.1` published at the tagged commit with APK, AppImage, Arch and
+  portable archives, `SHA256SUMS`, `BUILD-MANIFEST.json` and `VALIDATION_REPORT.md`.
+  Downloaded again from GitHub and verified: all four checksums OK, `prerelease=true`, `draft=false`.
+
 ## 2026-10-31 — v0.1.0-test.1 correction pass
 
 - Protocol doc rewritten as normative v2 (TLS-bound transcript, no downgrade).

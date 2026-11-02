@@ -26,5 +26,8 @@
     "Install the APK on the Mi 12 (HyperOS) and pair; report any handshake or transfer failure",
     "Run the AppImage on Arch/Hyprland and confirm the QML window and Dolphin action",
     "Build packaging/PKGBUILD with makepkg on Arch and report packaging fixes"
-  ]
+  ],
+  "release_url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.1",
+  "tag_target_commit": "8b1313371caa4b358dc63f34c85fc6cd7c1b1d3b",
+  "docs_head_note": "the tag points at the commit the assets were built from; documentation-only commits may follow it"
 }
