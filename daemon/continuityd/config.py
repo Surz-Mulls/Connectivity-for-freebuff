@@ -56,6 +56,16 @@ def ipc_socket_path() -> Path:
     return runtime_dir() / "ipc.sock"
 
 
+def api_config_path() -> Path:
+    """The one authoritative location of the HTTP bearer token/config file.
+
+    Shell launchers must ask for this path (``continuityd paths``) instead of rebuilding it from
+    ``XDG_RUNTIME_DIR`` themselves: a shell fallback to ``/tmp`` would point QML at a different,
+    world-writable directory than the daemon writes to.
+    """
+    return runtime_dir() / "http.token"
+
+
 @dataclass
 class Settings:
     device_name: str = ""

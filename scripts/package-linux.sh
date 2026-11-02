@@ -17,18 +17,22 @@ PORTABLE_NAME="continuity-linux-$ARCH-portable"
 STAGE="$WORK/$PORTABLE_NAME"
 mkdir -p "$DIST" "$WORK"
 
-command -v zstd >/dev/null 2>&1 || {
-  if ! .venv/bin/python -c "import zstandard" 2>/dev/null; then
-    echo "== installing zstandard (build tool only)"
-    .venv/bin/pip install -q zstandard
+PYTHON_BIN="${PYTHON:-python3}"
+if ! command -v zstd >/dev/null 2>&1; then
+  if ! "$PYTHON_BIN" -c "import zstandard" 2>/dev/null; then
+    BUILD_VENV="$ROOT/build/packaging-venv"
+    echo "== creating a build-only venv for zstandard"
+    "$PYTHON_BIN" -m venv "$BUILD_VENV"
+    "$BUILD_VENV/bin/pip" install -q zstandard
+    PYTHON_BIN="$BUILD_VENV/bin/python"
   fi
-}
+fi
 
 zstd_tar() {  # zstd_tar <dir> <out.tar.zst>
   if command -v zstd >/dev/null 2>&1; then
     tar -C "$1" -cf - . | zstd -q -19 -T0 -o "$2" -f
   else
-    .venv/bin/python - "$1" "$2" <<'PY'
+    "$PYTHON_BIN" - "$1" "$2" <<'PY'
 import os, sys, tarfile, zstandard
 root, out = sys.argv[1], sys.argv[2]
 cctx = zstandard.ZstdCompressor(level=19)
@@ -72,7 +76,7 @@ Terminal=false
 DESKTOP
 cp "$STAGE/continuity.desktop" "$STAGE/share/applications/continuity.desktop"
 
-.venv/bin/python - "$STAGE/share/icons/hicolor/scalable/apps/continuity.svg" <<'PY'
+"$PYTHON_BIN" - "$STAGE/share/icons/hicolor/scalable/apps/continuity.svg" <<'PY'
 import sys
 svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
 <rect width="128" height="128" rx="28" fill="#1e1e2e"/>

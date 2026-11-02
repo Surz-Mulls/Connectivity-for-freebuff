@@ -5,6 +5,18 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-10-31 — v0.1.0-test.1 correction pass
+
+- Protocol doc rewritten as normative v2 (TLS-bound transcript, no downgrade).
+- Python receiver: canonical UUIDs, peer binding, metadata-verified resume, 4-transfer cap,
+  hard-link no-clobber finalisation, no state left by rejected offers — `test_transfer_policy.py`.
+- Android: per-transfer Accept/Reject notification (45 s), peer-bound `Incoming`, no-clobber
+  finalisation, `files_auto_accept` opt-in default off.
+- Token path now comes from `continuityd paths`; no `/tmp` fallback in the launcher.
+- Packaging no longer needs a developer `.venv`; real self-contained AppImage (CPython + PySide6/Qt)
+  with an in-image self-test; maintained `packaging/PKGBUILD`.
+- Measured again: 82 Python tests, 17 JVM tests, APK + three Linux assets built.
+
 ## 2026-10-31 — audit pass (prompt v2)
 
 - Re-scanned the tree at `59360a9`. Findings A–K reproduced in the current source.

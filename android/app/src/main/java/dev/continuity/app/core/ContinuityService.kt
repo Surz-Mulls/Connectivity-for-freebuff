@@ -25,6 +25,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
@@ -70,6 +71,11 @@ class ContinuityService : Service() {
         identity = Identity.loadOrCreate(this, store.deviceName)
         createChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Starting…"))
+        registerReceiver(fileDecisionReceiver,
+            android.content.IntentFilter().apply {
+                addAction(ACTION_FILE_ACCEPT)
+                addAction(ACTION_FILE_REJECT)
+            }, Context.RECEIVER_NOT_EXPORTED)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -99,6 +105,8 @@ class ContinuityService : Service() {
 
     override fun onDestroy() {
         running.set(false)
+        runCatching { unregisterReceiver(fileDecisionReceiver) }
+        fileDecision.values.forEach { it.complete(false) }
         acceptJob?.cancel()
         runCatching { serverSocket?.close() }
         sessions.forEach { it.stop() }
@@ -241,8 +249,8 @@ class ContinuityService : Service() {
                     JSONObject().put("digest", body.optString("digest")).put("applied", applied)
                 }
             }
-            Protocol.Msg.FILE_OFFER -> acceptOffer(body)
-            Protocol.Msg.FILE_DONE -> finishTransfer(body)
+            Protocol.Msg.FILE_OFFER -> acceptOffer(session, body)
+            Protocol.Msg.FILE_DONE -> finishTransfer(session, body)
             Protocol.Msg.HANDOFF_URL -> {
                 val url = body.optString("url", "")
                 if (!url.startsWith("http://") && !url.startsWith("https://")) {
@@ -290,6 +298,7 @@ class ContinuityService : Service() {
         val name: String,
         val size: Long,
         val digest: String,
+        val peer: String,
         val staging: File,
         val destination: File,
         var written: Long = 0L
@@ -297,6 +306,17 @@ class ContinuityService : Service() {
 
     private val incoming = java.util.concurrent.ConcurrentHashMap<String, Incoming>()
     private val transferLock = Any()
+    private val fileDecision =
+        java.util.concurrent.ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
+    private val rejectedIds = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /** Accept/Reject buttons on the incoming-file notification. Not exported: same-app broadcasts. */
+    private val fileDecisionReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val id = intent?.getStringExtra("transfer_id") ?: return
+            fileDecision.remove(id)?.complete(intent.action == ACTION_FILE_ACCEPT)
+        }
+    }
 
     private fun handleBlob(session: ContinuitySession, header: JSONObject, data: ByteArray) {
         if (header.optString("type") != Protocol.Msg.FILE_CHUNK) return
@@ -304,6 +324,10 @@ class ContinuityService : Service() {
         val transfer = incoming[id]
         if (transfer == null) {
             session.sendError("protocol.unsafe", "chunk for an unknown transfer")
+            return
+        }
+        if (session.peer?.fingerprint != transfer.peer) {
+            session.sendError("identity.mismatch", "transfer belongs to another device")
             return
         }
         synchronized(transferLock) {
@@ -332,10 +356,17 @@ class ContinuityService : Service() {
     private fun rejectOffer(id: String, reason: String): JSONObject = JSONObject()
         .put("transfer_id", id).put("offset", 0).put("accept", false).put("reason", reason)
 
-    private fun acceptOffer(body: JSONObject): JSONObject {
+    /**
+     * Per-transfer consent is the default. `filesEnabled` only means "this device accepts file
+     * offers at all"; it never means "write every incoming file without asking". The offer blocks
+     * (suspends) until the user taps Accept/Reject or the request expires, so a sender never gets
+     * a `true` it can start streaming into.
+     */
+    private fun acceptOffer(session: ContinuitySession, body: JSONObject): JSONObject {
         val id = body.optString("transfer_id")
         if (!TransferPolicy.isValidTransferId(id)) return rejectOffer(id, "invalid transfer id")
         if (!store.filesEnabled || store.privacyMode) return rejectOffer(id, "file transfer disabled")
+        val peer = session.peer ?: return rejectOffer(id, "no authenticated peer")
         val name = TransferPolicy.safeName(body.optString("name"))
             ?: return rejectOffer(id, "unsafe file name")
         val size = body.optLong("size", -1L)
@@ -344,11 +375,24 @@ class ContinuityService : Service() {
         if (!TransferPolicy.isValidDigest(digest)) return rejectOffer(id, "invalid sha256")
 
         incoming[id]?.let { existing ->
-            if (existing.size != size || !existing.digest.equals(digest, true)) {
+            if (existing.peer != peer.fingerprint || existing.size != size ||
+                !existing.digest.equals(digest, true) || existing.name != name) {
                 return rejectOffer(id, "transfer id reused")
             }
             return JSONObject().put("transfer_id", id).put("offset", existing.written)
                 .put("accept", true)
+        }
+
+        val now = System.currentTimeMillis()
+        pruneRejected(now)
+        if (rejectedIds.containsKey(id)) return rejectOffer(id, "transfer was declined")
+
+        val autoAccept = store.filesAutoAccept && peer.trusted && peer.fingerprint.isNotEmpty()
+        val approved = autoAccept || awaitApproval(id, name, size, peer.name, peer.fingerprint)
+        if (!approved) {
+            rejectedIds[id] = now
+            AppState.note("declined incoming file: $name")
+            return rejectOffer(id, "rejected")
         }
 
         synchronized(transferLock) {
@@ -365,13 +409,57 @@ class ContinuityService : Service() {
             try {
                 if (staging.exists()) staging.delete()
                 if (!staging.createNewFile()) error("cannot create staging file")
+                staging.setReadable(false, false)
             } catch (exc: java.io.IOException) {
                 return rejectOffer(id, "cannot create staging file")
             }
-            incoming[id] = Incoming(id, name, size, digest.lowercase(), staging, destination)
-            AppState.note("incoming file: $name (${size} bytes)")
+            incoming[id] = Incoming(id, name, size, digest.lowercase(), peer.fingerprint,
+                staging, destination)
+            AppState.note("incoming file approved: $name (${size} bytes)")
             return JSONObject().put("transfer_id", id).put("offset", 0).put("accept", true)
         }
+    }
+
+    private fun pruneRejected(now: Long) {
+        rejectedIds.entries.removeIf { now - it.value > REJECTED_TTL_MS }
+    }
+
+    private fun awaitApproval(id: String, name: String, size: Long,
+                                      peerName: String, peerFingerprint: String): Boolean {
+        val deferred = CompletableDeferred<Boolean>()
+        fileDecision[id] = deferred
+        postOfferNotification(id, name, size, peerName)
+        return try {
+            // The session read loop is a plain thread, so this waits on the caller's thread. That is
+            // safe: no chunk can arrive before the offer is answered, and the 45 s cap keeps the
+            // wait under the sender's 60 s offer deadline.
+            runBlocking { withTimeoutOrNull(APPROVAL_TIMEOUT_MS) { deferred.await() } } ?: false
+        } finally {
+            fileDecision.remove(id)
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .cancel(id.hashCode())
+        }
+    }
+
+    private fun postOfferNotification(id: String, name: String, size: Long, peerName: String) {
+        val accept = PendingIntent.getBroadcast(this, id.hashCode(),
+            Intent(ACTION_FILE_ACCEPT).setPackage(packageName).putExtra("transfer_id", id),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val reject = PendingIntent.getBroadcast(this, id.hashCode() xor 0x5555,
+            Intent(ACTION_FILE_REJECT).setPackage(packageName).putExtra("transfer_id", id),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val notification = Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle("File from $peerName")
+            .setContentText("$name · $size bytes — accept or reject")
+            .setStyle(Notification.BigTextStyle().bigText(
+                "$peerName wants to send \"$name\" ($size bytes). Nothing is written until you accept."))
+            .setOngoing(true)
+            .addAction(Notification.Action.Builder(0, "Accept", accept).build())
+            .addAction(Notification.Action.Builder(0, "Reject", reject).build())
+            .build()
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .notify(id.hashCode(), notification)
     }
 
     private fun failTransfer(id: String, transfer: Incoming?, error: String): JSONObject {
@@ -379,11 +467,18 @@ class ContinuityService : Service() {
         return JSONObject().put("transfer_id", id).put("ok", false).put("error", error)
     }
 
-    private fun finishTransfer(body: JSONObject): JSONObject {
+    private fun finishTransfer(session: ContinuitySession, body: JSONObject): JSONObject {
         val id = body.optString("transfer_id")
+        if (!TransferPolicy.isValidTransferId(id)) {
+            return JSONObject().put("transfer_id", id).put("ok", false)
+                .put("error", "invalid transfer id")
+        }
         val transfer = incoming.remove(id)
             ?: return JSONObject().put("transfer_id", id).put("ok", false)
                 .put("error", "unknown transfer")
+        if (session.peer?.fingerprint != transfer.peer) {
+            return failTransfer(id, transfer, "transfer belongs to another device")
+        }
         val claimed = body.optString("sha256", "")
         if (claimed.isNotEmpty() && !claimed.equals(transfer.digest, true)) {
             return failTransfer(id, transfer, "offered digest changed")
@@ -402,14 +497,24 @@ class ContinuityService : Service() {
         }
         return try {
             var destination = transfer.destination
-            if (destination.exists()) {
-                destination = TransferPolicy.uniqueDestination(root, transfer.name)
-                    ?: return failTransfer(id, transfer, "no free destination name")
+            var attempts = 0
+            // ATOMIC_MOVE without REPLACE_EXISTING fails if the name appeared meanwhile; pick a
+            // new free name instead of ever overwriting a file the user already has.
+            while (true) {
+                if (destination.exists()) {
+                    destination = TransferPolicy.uniqueDestination(root, transfer.name)
+                        ?: return failTransfer(id, transfer, "no free destination name")
+                }
+                try {
+                    java.nio.file.Files.move(
+                        transfer.staging.toPath(), destination.toPath(),
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE
+                    )
+                    break
+                } catch (exc: java.nio.file.FileAlreadyExistsException) {
+                    if (++attempts >= 1000) return failTransfer(id, transfer, "no free destination name")
+                }
             }
-            java.nio.file.Files.move(
-                transfer.staging.toPath(), destination.toPath(),
-                java.nio.file.StandardCopyOption.ATOMIC_MOVE
-            )
             AppState.note("received ${destination.name}")
             JSONObject().put("transfer_id", id).put("ok", true)
                 .put("sha256", measured.second).put("path", destination.absolutePath)
@@ -640,6 +745,10 @@ class ContinuityService : Service() {
         const val ACTION_RING_DESKTOP = "dev.continuity.app.RING_DESKTOP"
         const val ACTION_SEND_FILE = "dev.continuity.app.SEND_FILE"
         const val ACTION_STOP = "dev.continuity.app.STOP"
+        const val ACTION_FILE_ACCEPT = "dev.continuity.app.FILE_ACCEPT"
+        const val ACTION_FILE_REJECT = "dev.continuity.app.FILE_REJECT"
+        const val APPROVAL_TIMEOUT_MS = 45_000L
+        const val REJECTED_TTL_MS = 600_000L
         private val PASSWORD = "continuity".toCharArray()
 
         @Volatile

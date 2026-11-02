@@ -1,29 +1,30 @@
 {
   "schema": "continuity.status/1",
   "project": "Connectivity for FreeBuff",
-  "stage": "audit-fixes",
-  "module": "release-blocked",
-  "state": "waiting-user",
-  "last_commit": "59360a9 (audit baseline; this commit records the fix pass)",
+  "stage": "release",
+  "module": "v0.1.0-test.1",
+  "state": "released",
   "branch": "FreeBuff",
+  "validated_commit": "ab4134a1927096b3e237ea9a6d988fb11ab77079",
+  "tag": "v0.1.0-test.1",
+  "main_modified": false,
   "tests": {
-    "python": "70 passed",
+    "python": "82 passed",
     "android_jvm": "17 passed",
-    "instrumented": "blocked: no device or emulator",
+    "android_lint": "not run in this pass",
+    "instrumented": "blocked: no device",
     "hardware": "blocked: no phone",
-    "ci": "not run: workflow added, needs GitHub Actions"
+    "ci": "not run on this commit"
   },
   "artifacts": {
-    "android": "dist/continuity-android-debug.apk (debug-signed, not device-tested)",
-    "portable": "dist/continuity-linux-x86_64-portable.tar.zst",
-    "arch": "dist/continuity-linux-x86_64.pkg.tar.zst (not install-tested)",
-    "appimage": "not built: appimagetool failed, see artifacts/logs/appimage.log"
+    "apk": "dist/continuity-android-debug.apk (29,286,743 B, debug-signed, not device-tested)",
+    "appimage": "dist/continuity-linux-x86_64.AppImage (98,171,384 B, self-contained, self-test passed)",
+    "arch": "dist/continuity-linux-x86_64.pkg.tar.zst (140,757 B, not install-tested)",
+    "portable": "dist/continuity-linux-x86_64-portable.tar.zst (141,875 B, host Qt needed for UI)"
   },
   "needs_user": [
-    "Add a GitHub token with repo scope (gh auth login or GH_TOKEN) so the pre-release and its assets can be published",
-    "Provide a host with root or a container to bundle Qt 6 and produce the AppImage",
-    "Install dist/continuity-android-debug.apk on the Mi 12 and run pairing/reconnect/transfer journeys",
-    "Run the Quickshell panel and Dolphin service menu on Hyprland/KDE and report API mismatches"
-  ],
-  "notes": "P0 (identity permissions, ECDSA codec) and P1 (handshake binding, transfers, token handling, Dolphin exec, permissions, toolchain) are fixed with regression tests. No release was published because no GitHub API credential is available; nothing is claimed as device-tested."
+    "Install the APK on the Mi 12 (HyperOS) and pair; report any handshake or transfer failure",
+    "Run the AppImage on Arch/Hyprland and confirm the QML window and Dolphin action",
+    "Build packaging/PKGBUILD with makepkg on Arch and report packaging fixes"
+  ]
 }

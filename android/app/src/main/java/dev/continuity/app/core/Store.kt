@@ -52,6 +52,15 @@ class Store(context: Context) {
         get() = prefs.getBoolean("files_enabled", true)
         set(value) = prefs.edit().putBoolean("files_enabled", value).apply()
 
+    /**
+     * Off by default on purpose. Accepting file *offers* and auto-accepting their *contents* are
+     * different decisions; only this explicit opt-in skips the per-file Accept/Reject prompt, and
+     * even then only for a device that is already pinned and trusted.
+     */
+    var filesAutoAccept: Boolean
+        get() = prefs.getBoolean("files_auto_accept", false)
+        set(value) = prefs.edit().putBoolean("files_auto_accept", value).apply()
+
     var privacyMode: Boolean
         get() = prefs.getBoolean("privacy_mode", false)
         set(value) = prefs.edit().putBoolean("privacy_mode", value).apply()

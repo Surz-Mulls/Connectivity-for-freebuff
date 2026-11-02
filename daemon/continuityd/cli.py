@@ -16,7 +16,8 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .config import Settings, config_dir, data_dir, ipc_socket_path
+from .config import (Settings, api_config_path, config_dir, data_dir, ipc_socket_path,
+                     runtime_dir)
 from .core import DeviceManager
 from .identity import Identity
 from .ipc import IPCServer
@@ -226,6 +227,18 @@ def cmd_version(args) -> int:
     return 0
 
 
+def cmd_paths(args) -> int:
+    """Authoritative local paths. Shell launchers must use these instead of guessing."""
+    payload = {
+        "ok": True,
+        "runtime_dir": str(runtime_dir()),
+        "ipc": str(ipc_socket_path()),
+        "api_config": str(api_config_path()),
+    }
+    _print(payload, args.json)
+    return 0
+
+
 # ---------------------------------------------------------------------- parser
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="continuityctl",
@@ -233,6 +246,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"continuityd {__version__}")
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("version").set_defaults(func=cmd_version)
+    paths = sub.add_parser("paths", help="print the authoritative runtime/socket/token paths")
+    paths.set_defaults(func=cmd_paths)
 
     run = sub.add_parser("run", help="run the daemon in the foreground")
     run.set_defaults(func=cmd_run)

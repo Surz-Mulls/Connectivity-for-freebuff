@@ -1,125 +1,132 @@
-# Validation report — v0.1.0 audit fix pass
+# Validation report — v0.1.0-test.1
 
-Branch `FreeBuff`, repository `Surz-Mulls/Connectivity-for-freebuff`.
-Audit start commit: `59360a9` (matches the commit named in the audit prompt). `main` was never
-checked out, committed to or pushed.
+Repository `Surz-Mulls/Connectivity-for-freebuff`, branch **`FreeBuff`** only.
+`main` was never checked out, committed to, merged, rebased or pushed by this work; the repository
+history records that the two branches have no common ancestor, which is left as it is.
 
-## 1. What was verified, and how
+This report replaces the previous one. Test counts below are measured in this run, not copied.
 
-| Area | Result | Evidence |
+## 1. Measured results
+
+| Area | Result | Command / evidence |
 |---|---|---|
-| Python daemon test suite | **passed** — 70 tests | `daemon/tests`, incl. 7 new binding tests |
-| Real inbound connection (finding A) | **passed** | `test_binding.py::test_daemon_accepts_real_inbound_connection` |
-| Protocol v2 downgrade rejection | **passed** | `test_binding.py::test_v1_envelope_is_rejected_without_downgrade` |
-| TLS certificate binding | **passed** | `test_hello_claiming_a_different_tls_certificate_is_rejected`, `test_client_aborts_when_a_relay_terminates_tls` |
-| Android JVM unit tests | **passed** — 17 tests | `./gradlew :app:testDebugUnitTest` |
-| ECDSA DER↔raw codec | **passed** — 64 shared vectors + 300 generated signatures | `EcdsaCodecTest`, `daemon/tests/vectors/ecdsa_vectors.json` |
-| Identity persistence across restart (finding C) | **passed** | `IdentityPersistenceTest` |
-| Transfer id/path/digest/size policy | **passed** | `TransferPolicyTest` |
-| APK build | **passed** | `dist/continuity-android-debug.apk` |
-| Portable archive | **built** (inspect only) | `dist/continuity-linux-x86_64-portable.tar.zst` |
-| Arch package | **built** (inspect only) | `dist/continuity-linux-x86_64.pkg.tar.zst` |
-| AppImage | **failed** | `artifacts/logs/appimage.log` |
-| QML UI / Quickshell / Dolphin service menu | **unverified** | no Qt 6 runtime, no KDE, no Hyprland on this host |
-| Phone pairing, reconnect, transfer, DeX | **blocked** | no Android device or emulator |
-| GitHub Actions | **not run** | workflow added, cannot execute without a GitHub API token |
+| Python daemon suite | **82 passed** | `cd daemon && ../.venv/bin/python -m pytest -q` |
+| Kotlin/JVM unit tests | **17 passed** | `./gradlew :app:testDebugUnitTest` |
+| Android debug build | **passed** | `./gradlew :app:assembleDebug` |
+| Cross-language ECDSA vectors | **passed** | 64 DER/raw vectors shared by both suites + 300 JVM-generated round-trips |
+| AppImage in-image self-test | **passed** | `AppRun --self-test` inside the built image (imports PySide6.QtQml, cryptography, zeroconf, qrcode, continuityd) |
+| Android lint | **not run in this pass** | requires the full lint task; previous pass reported no blocking errors |
+| QML/Quickshell/Dolphin on a live desktop | **blocked** | no Qt 6 display, no Hyprland, no KDE on this host |
+| Phone pairing / reconnect / transfer / DeX | **blocked** | no Android device or emulator |
+| GitHub Actions | **not run** | workflow committed, no run on this commit yet |
+| Arch install / launch / uninstall | **blocked** | no Arch environment, no `makepkg`, no root |
 
-## 2. P0 findings and fixes
+## 2. Critical/high findings fixed in this pass
 
-### C — identity key unreadable after first start (critical)
-`Identity.loadOrCreate` called `setReadable(false, false)` on the key, certificate and metadata.
-That clears the **owner's** read bit as well, so the next process start failed with
-`Permission denied`. Removed: `filesDir/identity` is already inaccessible to other apps. Regression
-test creates an identity, discards the object, reloads it from disk and verifies a signature.
+### 2.1 Protocol documentation vs implementation (high — misleading contract)
+`protocol/PROTOCOL.md` described v1 (`v: 1`, nonce-only signatures, no TLS binding) while both
+clients implement v2. Rewritten as a normative v2 specification: framing, envelope, the exact
+`hello.challenge`/`hello`/`hello.ok` schemas, the length-prefixed transcript
+(`continuity/handshake/v2` + NUL, role, both fingerprints, both nonces, observed TLS fingerprint),
+the no-downgrade rule, pairing-only state, capabilities, transfer rules, error codes and limits.
+`daemon/continuityd/protocol.py` docstring and README counts updated.
 
-### D — ECDSA DER conversion threw for every real signature (critical)
-The old `derToRaw` used fixed offsets (`der[3]`, `der[5]`), which are length bytes in real signatures.
-Replaced with `EcdsaCodec`, a structural SEQUENCE/INTEGER parser that handles short and long form
-lengths, sign padding, minimal-length enforcement, trailing bytes and truncation, and rejects scalars
-outside `1..n-1`. 64 committed DER/raw vectors are shared with the Python suite; 300 signatures
-generated on the JVM are round-tripped. The old code was reproduced as failing before the fix
-(`scripts/generate-ecdsa-vectors.py` vectors are exactly the cases it mishandled).
+### 2.2 Python receiver accepted weak transfer IDs and unbound duplicates (critical)
+`on_offer` accepted any non-empty string ≤64 chars, so a traversal-like id could reach a path, and a
+known id was resumed without comparing peer, name, size or digest. Now:
+canonical lowercase UUID only (`canonical_transfer_id`), bound to the authenticated peer fingerprint,
+duplicate offers must match name, size and SHA-256 exactly, cross-peer reuse is `identity.mismatch`,
+and a declined id is poisoned for 10 minutes (`capability.denied` on replay).
+Tests: `tests/test_transfer_policy.py::test_transfer_ids_must_be_canonical_uuids`,
+`::test_duplicate_id_must_match_peer_name_size_and_digest`, `::test_cross_peer_id_reuse_is_rejected`,
+`::test_chunk_from_another_peer_is_rejected`.
 
-### A — every inbound connection aborted (high)
-`core.py` awaited `StreamWriter.get_extra_info()`, which is synchronous: `TypeError` before any frame.
-Fixed, with a real server test instead of a mocked helper.
+### 2.3 Rejected/pending offers left state behind (high)
+The old path stored the incoming record even when the approver said no. Approval now happens
+**before** any staging file, record, transfer or lock is created; a decline, timeout or missing
+approver creates nothing and returns `accept: false` with a reason.
+Tests: `::test_declined_offer_leaves_nothing_behind_and_cannot_be_replayed`,
+`::test_missing_approver_never_accepts`, `::test_approver_timeout_is_a_rejection`.
 
-### B — handshake not bound to the TLS channel (high)
-Protocol v2 transcript: domain label + length-prefixed version, role, both certificate fingerprints,
-both nonces and the TLS certificate the signer actually observed. The client requires the TLS peer
-certificate to equal the in-band identity; the server requires the client's `tls` field to name the
-server certificate. A TLS-terminating relay therefore fails even though it forwards the real
-in-band certificate — proven by a relay test that stands up its own TLS server and pipes bytes to the
-real daemon. Android enforces `v == 2` on the handshake and every envelope; there is no fallback.
+### 2.4 Concurrency cap and overwrite race (critical — data loss)
+`os.replace` silently replaced an existing destination, and the cap was unenforced. Finalisation now
+hard-links the staging file into place (`os.link` fails if the destination exists) and retries with
+`name-1.ext` under a single finalisation lock; the resolved path is re-checked to be inside the
+receive directory. Locks and incoming records are removed on every terminal path.
+Tests: `::test_same_name_finishing_together_never_overwrites`,
+`::test_destination_appearing_after_offer_is_not_replaced`, `::test_concurrent_transfer_cap_is_enforced`.
 
-## 3. P1 findings
+### 2.5 Android accepted incoming files without asking (high — privacy)
+`acceptOffer` returned `accept: true` as soon as the global file switch was on. It now suspends the
+offer on a per-transfer decision: a notification shows sender, filename and size with **Accept** and
+**Reject** actions (45 s expiry, then rejected), nothing is written before approval, and a rejection
+is remembered for 10 minutes. Auto-accept is a separate opt-in (`files_auto_accept`, default off)
+that only applies to an already-pinned trusted device.
 
-* **E — Android transfers.** Transfer ids must be canonical UUIDs; names are reduced to safe
-  basenames; digests must be 64 hex characters; size is capped at 8 GiB; data is streamed to
-  `.name.<uuid>.part` in bounded chunks, never `readBytes()`; size and digest are recomputed before
-  an atomic `ATOMIC_MOVE`; collisions get a deterministic suffix; receiving no longer depends on the
-  clipboard setting (`Store.filesEnabled` added).
-* **G — local API token.** The launcher passed `--api-token=<bearer>` on the QML command line, where
-  `/proc/<pid>/cmdline` exposes it to other local users. QML now receives only `--api-config=<0600
-  file>` and reads port/token from it. Diagnostics exports changed from `0644` to `0600`. The
-  runtime directory no longer falls back to world-writable `/tmp`; it uses a `0700` directory under
-  `XDG_STATE_HOME`.
-* **H — process execution.** The Dolphin service menu used `Exec=sh -c '… %F'`; it now calls the
-  helper directly with `@HELPER@ %F` substituted at install time, so filenames are never parsed by a
-  shell. Native-messaging host already used argv arrays and http(s)-only validation.
-* **F — permissions.** `READ_MEDIA_IMAGES` removed; files arrive through SAF/content URIs.
-* **J — toolchain.** Tracked `scripts/bootstrap-toolchain.sh` (Gradle verified against the published
-  SHA-256, pinned in the script), committed Gradle wrapper with `distributionSha256Sum`, LICENSE
-  (GPL-3.0), and `scripts/build-android.sh` no longer depends on an untracked bootstrap file.
-* **I — not changed.** mDNS still advertises the fingerprint; reducing it to a prefix would break
-  the "connect by discovery" flow without a replacement pinning path. Listed as outstanding.
-* **K — status files.** Updated in this commit; a file cannot contain its own SHA, so the recorded
-  value is the parent commit.
+### 2.6 Android transfers were not peer-bound (high)
+`Incoming` now stores the senders fingerprint; chunk and finalisation handlers reject a different
+session with `identity.mismatch`, and finalisation retries on `FileAlreadyExistsException` instead of
+replacing an existing file.
 
-## 4. Reconciliation with the supplied patch
+### 2.7 Launcher rebuilt the token path instead of asking the daemon (high)
+`desktop/run-continuity.sh` used `${XDG_RUNTIME_DIR:-/tmp}/continuity/http.token`, which could point
+at a different directory than the daemon writes and reintroduced `/tmp`. The daemon now exposes
+`api_config_path()` and `continuityd paths --json`; the launcher asks for it (falling back to the
+package's own `config` module), passes only the **path** to QML, and fails with a useful message when
+the daemon is absent.
 
-The prompt describes `patches/freebuff-fixes.patch`, `reference/`, `repro/` and
-`VERIFICATION_OF_FINDINGS.md`. **Only the audit prompt itself was supplied**; no patch, reference
-implementation or reproduction was present in the workspace or the repository. Every fix was
-therefore re-implemented from the descriptions and independently verified with the tests above. No
-claim is made that the original patch was applied.
+### 2.8 Packaging assumed a developer `.venv` (high — clean CI failure)
+`scripts/package-linux.sh` called `.venv/bin/python` unconditionally. It now uses
+`${PYTHON:-python3}` and creates a build-only venv for `zstandard` when the host lacks it; no
+untracked developer state is required.
 
-## 5. Android artifact
+### 2.9 AppImage was broken and host-dependent (high — deliverable)
+The old script copied only `AppRun` out of the extracted tool, which cannot work (exit 127), and the
+result would have required a host Qt/Python. `scripts/build-appimage.sh` now builds a real AppDir
+containing CPython 3.12, `cryptography`, `zeroconf`, `qrcode`, `dbus-next`, **PySide6-Essentials
+6.12.0 with its Qt 6/QML modules**, the daemon and the QML client, runs an in-image self-test, and
+invokes appimagetool from its complete extracted directory. Any failure aborts the build; there is no
+"success" message for a missing artifact.
 
-* File: `dist/continuity-android-debug.apk`
-* Size / SHA-256: see `dist/continuity-android-debug.apk.sha256` (recorded at build time)
-* Package `dev.continuity.app`, versionName `0.1.0`, versionCode `1`
-* minSdk 33, targetSdk 35, compileSdk 35
-* Debug-signed with the AGP debug keystore — **not** production/release signed
-* No device or emulator was available: launch, pairing, reconnect and transfer are **not**
-  device-tested.
+### 2.10 Arch metadata (medium)
+A maintained `packaging/PKGBUILD` is committed with the complete dependency set (`python`,
+`python-cryptography`, `python-zeroconf`, `python-qrcode`, `python-dbus-next`, `qt6-declarative`;
+`python-pyside6` as an alternative runtime). The uploaded `.pkg.tar.zst` is assembled from that
+layout on Ubuntu and is **not** `makepkg`-tested or install-tested; the manifest says so.
 
-## 6. Linux artifacts
+### 2.11 Inconsistent counts (medium)
+README and `docs/implementation-validation.md` claimed 63 tests; they now state the measured 82 and
+identify the protocol version. `STATUS.json`, `PROGRESS.md`, the manifest and these notes all point
+at one build.
 
-| Format | File | Built | Inspected | Installed | Launched |
-|---|---|---|---|---|---|
-| Portable | `dist/continuity-linux-x86_64-portable.tar.zst` | yes | yes (61 entries) | n/a | no — no Qt 6 runtime |
-| Arch package | `dist/continuity-linux-x86_64.pkg.tar.zst` | yes | yes (`.PKGINFO`, 64 entries) | no — no pacman/makepkg | no |
-| AppImage | not produced | no | — | — | — |
+## 3. Release assets (built from this commit)
 
-Blockers, stated plainly:
+| File | Size | SHA-256 |
+|---|---|---|
+| `continuity-android-debug.apk` | 29,286,743 | `ce0989b1279a2c10042dabb9ed1477ac7aff81d95db1970a4ebccb109e061640` |
+| `continuity-linux-x86_64.AppImage` | 98,171,384 | `dcacae7ee32700068e9bc84c508accb7407c3cd96269caa04d14738ffdec18b7` |
+| `continuity-linux-x86_64.pkg.tar.zst` | 140,757 | `453cee850dc76c62fc1b0776a5ebadcca681e468bd68b26f17dca4cb8f7f40fa` |
+| `continuity-linux-x86_64-portable.tar.zst` | 141,875 | `70015178a0a2be3b4347732724a49f1177466196a6b249948766f1f5f9c29fba` |
 
-* The host has no root, so `qt6-declarative`, `pacman`/`makepkg` and `squashfs-tools` cannot be
-  installed. Nothing was faked: the AppImage was not produced. `appimagetool`'s extracted runtime
-  exits 127 (`.../usr/bin/appimagetool: not found`), i.e. the self-extracted helper cannot run in
-  this container; the exact output is in `artifacts/logs/appimage.log`.
-* Neither Linux archive bundles Qt or CPython. Both declare `qt6-declarative` (or PySide6) and
-  Python plus the daemon's wheels as host dependencies. A genuinely self-contained AppImage needs a
-  relocatable CPython and Qt, which this environment cannot assemble.
-* The Arch package was assembled from the same tree that `packaging/PKGBUILD` installs, but was not
-  produced by `makepkg`; treat install testing as **unverified**.
+Android: package `dev.continuity.app`, versionName `0.1.0`, versionCode `1`, minSdk 33,
+targetSdk 35, compileSdk 35, **debug-signed with the AGP debug keystore — not a production or Play
+release**. No device test was possible.
 
-## 7. Not fixed / remaining work
+The AppImage bundles its runtime and needs no project Python or Qt installation. It was not launched
+on a clean machine or with a GUI here (no display server), so desktop integration, xcb platform
+plugin loading and the QML window remain **unverified**; only the in-image import self-test passed.
 
-1. mDNS privacy (fingerprint prefix + explicit opt-in) — finding I.
-2. Browser extension: `allowed_origins` still needs the real extension id; pin a `key` in the
-   manifest so the id is deterministic.
-3. Quickshell panel and QML client never executed (no compositor/Qt).
-4. Linux packaging needs an environment with root or a container to bundle Qt and build the AppImage.
-5. GitHub pre-release not published: the workspace has an SSH key with write access but no GitHub
-   API token, and `gh` is not authenticated. See the final report.
+## 4. Not done, deliberately
+
+1. **Automatic reconnect with backoff** (core gap named in the brief) is still **not implemented**;
+   reconnect is manual.
+2. Notification relay behaviour under Android 15 redaction, DeX/scrcpy supervision, Quickshell
+   module, Dolphin multi-file action and the browser extension allowlist are **unverified** here.
+3. mDNS still advertises the full fingerprint.
+4. Arch package is not `makepkg`/install tested; CI has not run on this commit.
+
+## 5. Reconciliation with the external patch
+
+No `patches/freebuff-fixes.patch`, `reference/`, `repro/` or `VERIFICATION_OF_FINDINGS.md` was
+provided in this workspace. Every fix here was implemented from the written findings and verified by
+the tests named above; the external patch was not applied and no such claim is made.

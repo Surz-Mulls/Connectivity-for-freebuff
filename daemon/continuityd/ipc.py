@@ -21,7 +21,7 @@ import struct
 from pathlib import Path
 from typing import Any
 
-from .config import ipc_socket_path, runtime_dir
+from .config import api_config_path, ipc_socket_path, runtime_dir
 from .protocol import ProtocolError
 from .session import SessionError
 
@@ -36,7 +36,7 @@ class IPCServer:
         self.http_server: asyncio.Server | None = None
         self.token = secrets.token_urlsafe(32)
         self.http_port = 0
-        self.token_file = runtime_dir() / HTTP_PORT_FILE
+        self.token_file = api_config_path()
 
     # ---------------------------------------------------------------- unix socket
     async def start(self) -> dict:

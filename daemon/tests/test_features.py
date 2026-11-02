@@ -73,10 +73,11 @@ async def test_clipboard_rejects_digest_mismatch_and_sensitive(tmp_path):
 async def test_transfer_rejects_oversized_offer(tmp_path):
     settings = make_settings(tmp_path)
     service = TransferService(settings)
-    fake_session = type("S", (), {"peer": type("P", (), {"name": "x"})()})()
+    fake_session = type("S", (), {"peer": type("P", (), {"name": "x",
+                                                        "fingerprint": "a" * 64})()})()
     with pytest.raises(ProtocolError):
         await service.on_offer(fake_session, {
-            "transfer_id": "t", "name": "big.bin", "size": 9 * 1024**3,
+            "transfer_id": "11111111-1111-4111-8111-111111111111", "name": "big.bin", "size": 9 * 1024**3,
             "sha256": "a" * 64,
         })
 
@@ -84,15 +85,16 @@ async def test_transfer_rejects_oversized_offer(tmp_path):
 async def test_chunk_integrity_failure_leaves_no_file(tmp_path):
     settings = make_settings(tmp_path, files_auto_accept=True)
     service = TransferService(settings)
-    fake_session = type("S", (), {"peer": type("P", (), {"name": "x"})()})()
+    fake_session = type("S", (), {"peer": type("P", (), {"name": "x",
+                                                        "fingerprint": "a" * 64})()})()
     payload = b"hello world"
     offer = await service.on_offer(fake_session, {
-        "transfer_id": "t2", "name": "note.txt", "size": len(payload),
+        "transfer_id": "22222222-2222-4222-8222-222222222222", "name": "note.txt", "size": len(payload),
         "sha256": hashlib.sha256(b"different").hexdigest(),
     })
     assert offer["accept"] is True
-    await service.on_chunk(None, {"transfer_id": "t2", "offset": 0}, payload)
-    result = await service.on_done(None, {"transfer_id": "t2"})
+    await service.on_chunk(fake_session, {"transfer_id": "22222222-2222-4222-8222-222222222222", "offset": 0}, payload)
+    result = await service.on_done(fake_session, {"transfer_id": "22222222-2222-4222-8222-222222222222"})
     assert result["ok"] is False
     received = Path(settings.receive_dir)
     assert not (received / "note.txt").exists()
@@ -102,15 +104,16 @@ async def test_chunk_integrity_failure_leaves_no_file(tmp_path):
 async def test_successful_transfer_writes_file(tmp_path):
     settings = make_settings(tmp_path, files_auto_accept=True)
     service = TransferService(settings)
-    fake_session = type("S", (), {"peer": type("P", (), {"name": "x"})()})()
+    fake_session = type("S", (), {"peer": type("P", (), {"name": "x",
+                                                        "fingerprint": "a" * 64})()})()
     payload = b"payload!" * 1000
     digest = hashlib.sha256(payload).hexdigest()
     await service.on_offer(fake_session, {
-        "transfer_id": "t3", "name": "data.bin", "size": len(payload),
+        "transfer_id": "33333333-3333-4333-8333-333333333333", "name": "data.bin", "size": len(payload),
         "sha256": digest,
     })
-    await service.on_chunk(None, {"transfer_id": "t3", "offset": 0}, payload)
-    result = await service.on_done(None, {"transfer_id": "t3"})
+    await service.on_chunk(fake_session, {"transfer_id": "33333333-3333-4333-8333-333333333333", "offset": 0}, payload)
+    result = await service.on_done(fake_session, {"transfer_id": "33333333-3333-4333-8333-333333333333"})
     assert result["ok"] is True
     assert (Path(settings.receive_dir) / "data.bin").read_bytes() == payload
 
@@ -118,14 +121,15 @@ async def test_successful_transfer_writes_file(tmp_path):
 async def test_duplicate_names_do_not_overwrite(tmp_path):
     settings = make_settings(tmp_path, files_auto_accept=True)
     service = TransferService(settings)
-    fake_session = type("S", (), {"peer": type("P", (), {"name": "x"})()})()
+    fake_session = type("S", (), {"peer": type("P", (), {"name": "x",
+                                                        "fingerprint": "a" * 64})()})()
     (Path(settings.receive_dir) / "report.pdf").write_bytes(b"existing")
     payload = b"new"
     await service.on_offer(fake_session, {
-        "transfer_id": "t4", "name": "report.pdf", "size": len(payload),
+        "transfer_id": "44444444-4444-4444-8444-444444444444", "name": "report.pdf", "size": len(payload),
         "sha256": hashlib.sha256(payload).hexdigest(),
     })
-    await service.on_chunk(None, {"transfer_id": "t4", "offset": 0}, payload)
-    await service.on_done(None, {"transfer_id": "t4"})
+    await service.on_chunk(fake_session, {"transfer_id": "44444444-4444-4444-8444-444444444444", "offset": 0}, payload)
+    await service.on_done(fake_session, {"transfer_id": "44444444-4444-4444-8444-444444444444"})
     assert (Path(settings.receive_dir) / "report.pdf").read_bytes() == b"existing"
     assert (Path(settings.receive_dir) / "report-1.pdf").read_bytes() == b"new"

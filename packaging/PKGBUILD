@@ -1,0 +1,47 @@
+# Maintainer-facing Arch package definition. Build with `makepkg -si` on Arch/base-devel.
+# The release tarball is the GitHub tag archive; both SHA-256 values live in the release SHA256SUMS
+# once the pre-release is published, so replace the placeholder before a real `makepkg` run.
+pkgname=continuity
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Local-first Android/Linux continuity: pinned pairing, clipboard, files, notifications"
+arch=('x86_64')
+url="https://github.com/Surz-Mulls/Connectivity-for-freebuff"
+license=('GPL-3.0-only')
+depends=('python' 'python-cryptography' 'python-zeroconf' 'python-qrcode' 'python-dbus-next'
+         'qt6-declarative')
+optdepends=('python-pyside6: alternative QML runtime instead of qt6-declarative')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/Surz-Mulls/Connectivity-for-freebuff/archive/refs/tags/v0.1.0-test.1.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  local src="$srcdir/Connectivity-for-freebuff-0.1.0-test.1"
+  install -dm0755 "$pkgdir/usr/lib/continuity" "$pkgdir/usr/bin" \
+                   "$pkgdir/usr/share/applications" "$pkgdir/usr/share/licenses/continuity" \
+                   "$pkgdir/usr/share/icons/hicolor/scalable/apps"
+  cp -r "$src/daemon/continuityd" "$pkgdir/usr/lib/continuity/"
+  cp -r "$src/desktop/qml" "$pkgdir/usr/lib/continuity/"
+  install -Dm0755 "$src/desktop/run-continuity.sh" "$pkgdir/usr/lib/continuity/run-continuity.sh"
+  install -Dm0755 "$src/desktop/qml_launcher.py" "$pkgdir/usr/lib/continuity/qml_launcher.py"
+
+  cat > "$pkgdir/usr/bin/continuityd" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPATH="/usr/lib/continuity${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -c 'import sys; from continuityd.cli import main; sys.exit(main())' "$@"
+SH
+  chmod 0755 "$pkgdir/usr/bin/continuityd"
+  cp "$pkgdir/usr/bin/continuityd" "$pkgdir/usr/bin/continuityctl"
+
+  cat > "$pkgdir/usr/bin/continuity" <<'SH'
+#!/usr/bin/env bash
+exec /usr/lib/continuity/run-continuity.sh "$@"
+SH
+  chmod 0755 "$pkgdir/usr/bin/continuity"
+
+  install -Dm0644 "$src/LICENSE" "$pkgdir/usr/share/licenses/continuity/LICENSE"
+  install -Dm0644 "$src/packaging/continuity.desktop" \
+    "$pkgdir/usr/share/applications/continuity.desktop"
+  install -Dm0644 "$src/packaging/continuity.svg" \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/continuity.svg"
+}

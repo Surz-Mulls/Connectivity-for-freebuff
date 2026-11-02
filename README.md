@@ -17,7 +17,7 @@ the repository root). The research pack that the prompt references is preserved 
 
 | Component | Path | Status |
 |---|---|---|
-| Daemon (protocol, pairing, clipboard, files, notifications, diagnostics, DeX supervision) | `daemon/` | implemented, 63 automated tests passing |
+| Daemon (protocol, pairing, clipboard, files, notifications, diagnostics, DeX supervision) | `daemon/` | implemented, 82 automated tests passing (protocol v2) |
 | Wire protocol specification v1 | `protocol/PROTOCOL.md` | normative |
 | Local IPC: Unix socket + loopback HTTP bridge, schema | `daemon/continuityd/ipc.py`, `docs/ipc-schema.md` | implemented + tested |
 | CLI (`continuityd`, `continuityctl`) | `daemon/continuityd/cli.py` | implemented |

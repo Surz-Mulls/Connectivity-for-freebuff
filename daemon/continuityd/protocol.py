@@ -1,4 +1,4 @@
-"""Envelope + message validation for protocol v1.
+"""Envelope + message validation for protocol v2.
 
 Validation is deliberately strict and cheap: a malformed or oversized frame must be rejected
 before any handler sees it.

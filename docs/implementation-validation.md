@@ -14,7 +14,7 @@ Gradle, Qt 6, Rust, `adb`, `scrcpy` or `kdeconnect` preinstalled.
 
 | Check | Command | Result |
 |---|---|---|
-| Daemon test suite | `cd daemon && ../.venv/bin/python -m pytest -q` | **63 passed** |
+| Daemon test suite | `cd daemon && ../.venv/bin/python -m pytest -q` | **82 passed** (protocol v2, includes the transfer-policy and TLS-binding suites) |
 | Theme generation | `.venv/bin/python scripts/generate-theme.py` | generated `desktop/qml/Theme.qml` + Android `ui/Theme.kt` |
 | Theme drift | `scripts/generate-theme.py --check` | no drift |
 | Android toolchain | JDK 21 + cmdline-tools + `platforms;android-35` + `build-tools;35.0.0` in `.toolchain/` | installed without root |
