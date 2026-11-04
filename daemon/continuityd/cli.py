@@ -282,6 +282,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("version").set_defaults(func=cmd_version)
     paths = sub.add_parser("paths", help="print the authoritative runtime/socket/token paths")
+    paths.add_argument("--json", action="store_true")
     paths.set_defaults(func=cmd_paths)
 
     run = sub.add_parser("run", help="run the daemon in the foreground")
