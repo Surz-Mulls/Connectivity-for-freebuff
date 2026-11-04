@@ -60,13 +60,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Qt and packaging tools
+      - name: Install packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            qt6-declarative-dev qml6-module-qtquick-controls qml6-module-qtquick-layouts \
-            qt6-qmltooling-plugins zstd squashfs-tools
-      - name: Build Linux formats
+          sudo apt-get install -y --no-install-recommends zstd
+      - name: Build Linux deliverables (canonical pipeline; AppImage failure is fatal)
         run: bash scripts/package-linux.sh
       - name: Verify artifacts
         run: |
@@ -74,6 +72,13 @@ jobs:
           test -s dist/continuity-linux-x86_64.pkg.tar.zst
           test -s dist/continuity-linux-x86_64-portable.tar.zst
           cd dist && sha256sum -c SHA256SUMS
+      - name: Validate the AppImage (type, exec bit, in-image self-test)
+        run: |
+          file dist/continuity-linux-x86_64.AppImage | grep -qi appimage
+          chmod +x dist/continuity-linux-x86_64.AppImage
+          QT_QPA_PLATFORM=offscreen dist/continuity-linux-x86_64.AppImage --self-test
+          # FUSE-free invocation must also work
+          QT_QPA_PLATFORM=offscreen dist/continuity-linux-x86_64.AppImage --appimage-extract-and-run --self-test
       - uses: actions/upload-artifact@v4
         with:
           name: linux-deliverables

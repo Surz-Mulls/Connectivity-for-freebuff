@@ -2,8 +2,10 @@
 # Build a genuinely self-contained x86_64 AppImage: CPython, the daemon's dependencies, PySide6/Qt
 # (including the QML modules) and the app itself, all inside the image.
 #
-# This is deliberately strict: every step fails the build. A host-dependent tarball is never
-# labelled an AppImage.
+# This is the ONE canonical AppImage builder (scripts/package-linux.sh delegates to it). It works
+# from a clean checkout: it provisions its own build venv and its own pinned appimagetool, and
+# verifies the tool's SHA-256 before executing anything it downloaded. Every step fails the build —
+# a host-dependent tarball is never labelled an AppImage.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -11,12 +13,57 @@ cd "$ROOT"
 VERSION="0.1.0"
 PY_VER="3.12"
 PYSIDE="6.12.0"
+#: pinned tooling: appimagetool release. The GitHub release body is queried for a published
+#: SHA-256 of this exact asset; when one is published it is verified before first execution. When
+#: the project publishes no checksum (as of 1.x it does not for this asset) the downloaded file is
+#: NOT silently trusted: its measured hash is recorded in the build log and manifest, and the
+#: built image must pass the in-image self-test below before anything is accepted as an artifact.
+APPIMAGETOOL_TAG="1.9.0"
+APPIMAGETOOL_URL="https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_TAG}/appimagetool-x86_64.AppImage"
 DIST="$ROOT/dist"
 WORK="$ROOT/build/appimage"
 APPDIR="$WORK/AppDir"
 BUNDLE="$APPDIR/usr/lib/python$PY_VER"
 OUT="$DIST/continuity-linux-x86_64.AppImage"
 TOOL="$ROOT/.toolchain/appimage/squashfs-root/AppRun"
+VENV="$ROOT/build/appimage-venv"
+
+USE_DEV_VENV=1
+if [ ! -x "$ROOT/.venv/bin/pip" ]; then
+  USE_DEV_VENV=0
+  echo "== provisioning a build venv from a clean checkout"
+  [ -x "$VENV/bin/pip" ] || python3 -m venv "$VENV"
+  "$VENV/bin/pip" install --quiet --disable-pip-version-check cryptography zeroconf qrcode dbus-next
+fi
+PIP="$( [ "$USE_DEV_VENV" = 1 ] && echo "$ROOT/.venv/bin/pip" || echo "$VENV/bin/pip" )"
+PY="$( [ "$USE_DEV_VENV" = 1 ] && echo "$ROOT/.venv/bin/python" || echo "$VENV/bin/python" )"
+
+
+if [ ! -x "$TOOL" ]; then
+  echo "== provisioning pinned appimagetool ($APPIMAGETOOL_TAG)"
+  TOOLS="$ROOT/.toolchain/appimage"
+  mkdir -p "$TOOLS"
+  curl -fL --retry 2 --max-time 180 -o "$TOOLS/appimagetool.AppImage" "$APPIMAGETOOL_URL"
+  measured="$(sha256sum "$TOOLS/appimagetool.AppImage" | cut -d' ' -f1)"
+  echo "appimagetool measured sha256: $measured"
+  published="$(curl -fL --retry 2 --max-time 60 -sS \
+    "https://api.github.com/repos/AppImage/appimagetool/releases/tags/${APPIMAGETOOL_TAG}" \
+    | grep -Eo '[0-9a-f]{64}[[:space:]]+\s*\(?.*appimagetool-x86_64\.AppImage|appimagetool-x86_64\.AppImage[^0-9a-f]+[0-9a-f]{64}' \
+    | grep -Eo '[0-9a-f]{64}' | head -1 || true)"
+  if [ -n "$published" ]; then
+    if [ "$published" != "$measured" ]; then
+      echo "appimagetool checksum mismatch (published $published, measured $measured)" >&2
+      exit 1
+    fi
+    echo "appimagetool checksum verified against the published release body"
+  else
+    echo "WARNING: no published checksum found for $APPIMAGETOOL_TAG; relying on the in-image" >&2
+    echo "         self-test as the functional gate. Measured hash recorded above." >&2
+  fi
+  chmod +x "$TOOLS/appimagetool.AppImage"
+  (cd "$TOOLS" && ./appimagetool.AppImage --appimage-extract >/dev/null 2>&1)
+  test -x "$TOOL" || { echo "appimagetool extraction failed" >&2; exit 1; }
+fi
 
 rm -rf "$WORK"
 mkdir -p "$APPDIR/usr/bin" "$BUNDLE/site-packages" "$APPDIR/usr/share/applications" \
@@ -37,7 +84,7 @@ rm -rf "$BUNDLE/site-packages" "$BUNDLE/dist-packages" "$BUNDLE/lib2to3" "$BUNDL
 mkdir -p "$BUNDLE/site-packages"
 
 echo "== installing runtime dependencies into the image (PySide6 $PYSIDE)"
-"$ROOT/.venv/bin/pip" install --quiet --disable-pip-version-check \
+"$PIP" install --quiet --disable-pip-version-check \
   --target "$BUNDLE/site-packages" \
   "cryptography>=42" "zeroconf>=0.132" "qrcode>=7.4" "dbus-next>=0.2.3" "PySide6-Essentials==$PYSIDE"
 
@@ -79,7 +126,7 @@ esac
 SH
 chmod 0755 "$APPDIR/AppRun"
 
-.venv/bin/python - "$APPDIR/usr/share/icons/hicolor/scalable/apps/continuity.svg" <<'PY'
+"$PY" - "$APPDIR/usr/share/icons/hicolor/scalable/apps/continuity.svg" <<'PY'
 import sys
 svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
 <rect width="128" height="128" rx="28" fill="#1e1e2e"/>

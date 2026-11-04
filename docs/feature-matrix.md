@@ -22,7 +22,7 @@ Nothing below is marked passing because it compiled.
 | Capability ceiling per message | implemented-and-tested | `test_capability_is_enforced` |
 | Untrusted peer limited to pairing messages | implemented-and-tested | `test_untrusted_peer_is_limited_to_pairing` |
 | mDNS discovery | implemented-unverified | zeroconf code path; no second host here |
-| Automatic reconnect/backoff after link loss | **not-implemented** | manual reconnect only; documented limitation |
+| Automatic reconnect/backoff after link loss | **implemented-unverified** (Linux side) | Desktop daemon: bounded exponential backoff with jitter, reset on success, revoked peers never re-linked, honest `backoff/connecting/offline` states in the snapshot; policy + loop unit tests (`test_reconnect.py`). Android side: bounded backoff toward the last paired desktop (`ReconnectPolicy.kt`, JVM tests), pinned fingerprint required. **not-verified on real Wi-Fi/sleep-wake: needs a phone and compositor session; see docs/batch-test-matrix.md** |
 | Android pairing UI + pinned connect | implemented-unverified | APK builds; needs device |
 
 ## Clipboard

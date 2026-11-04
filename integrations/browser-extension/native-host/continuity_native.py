@@ -19,17 +19,29 @@ MAX_MESSAGE = 1 << 20
 CONTINUITYCTL = os.environ.get("CONTINUITYCTL", "continuityctl")
 
 
+def _read_exactly(stream, count: int) -> bytes:
+    """Native messaging framing must read the full announced payload; read(n) may return less."""
+    chunks = bytearray()
+    while len(chunks) < count:
+        block = stream.read(count - len(chunks))
+        if not block:
+            raise EOFError("native-messaging payload truncated")
+        chunks.extend(block)
+    return bytes(chunks)
+
+
 def read_message() -> dict | None:
-    raw = sys.stdin.buffer.read(4)
-    if len(raw) != 4:
-        return None
-    (length,) = struct.unpack("<I", raw)
-    if length == 0 or length > MAX_MESSAGE:
-        return None
-    payload = sys.stdin.buffer.read(length)
     try:
-        return json.loads(payload.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+        raw = _read_exactly(sys.stdin.buffer, 4)
+        (length,) = struct.unpack("<I", raw)
+        if length == 0 or length > MAX_MESSAGE:
+            return None
+        payload = _read_exactly(sys.stdin.buffer, length)
+        decoded = json.loads(payload.decode("utf-8"))
+        if not isinstance(decoded, dict):
+            return None
+        return decoded
+    except (EOFError, UnicodeDecodeError, json.JSONDecodeError):
         return None
 
 
@@ -44,10 +56,16 @@ def main() -> int:
     if message is None:
         write_message({"ok": False, "error": "invalid message"})
         return 1
-    url = str(message.get("url", ""))
+    url = str(message.get("url", ""))[:8192]
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         write_message({"ok": False, "error": "only http(s) URLs may be sent"})
+        return 1
+    if parsed.username or parsed.password:
+        write_message({"ok": False, "error": "URLs with embedded credentials are rejected"})
+        return 1
+    if parsed.port is not None and not 1 <= parsed.port <= 65535:
+        write_message({"ok": False, "error": "invalid URL port"})
         return 1
 
     try:
@@ -59,13 +77,17 @@ def main() -> int:
             write_message({"ok": False, "error": "no connected phone"})
             return 1
         fingerprint = devices[0]["fingerprint"]
-        result = subprocess.run([CONTINUITYCTL, "handoff", fingerprint, url],
+        result = subprocess.run([CONTINUITYCTL, "handoff", fingerprint, url, "--json"],
                                 capture_output=True, timeout=30, check=False)
         if result.returncode != 0:
-            write_message({"ok": False, "error": "handoff failed"})
+            detail = result.stdout.decode("utf-8", "replace")[:200]
+            write_message({"ok": False, "error": f"handoff failed: {detail}"})
             return 1
-        write_message({"ok": True})
-        return 0
+        # The CLI exit code reflects failure, but the phone's reply is the authoritative result:
+        # a structured {ok:false} or accepted:false is a failed handoff, not a success.
+        reply = json.loads(result.stdout or b"{}")
+        accepted = bool(reply.get("accepted")) or bool(reply.get("ok"))
+        write_message({"ok": True, "accepted": accepted})
     except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
         write_message({"ok": False, "error": f"daemon unavailable: {exc.__class__.__name__}"})
         return 1

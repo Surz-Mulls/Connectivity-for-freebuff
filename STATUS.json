@@ -1,33 +1,36 @@
 {
   "schema": "continuity.status/1",
   "project": "Connectivity for FreeBuff",
-  "stage": "release",
-  "module": "v0.1.0-test.1",
-  "state": "released",
+  "stage": "candidate",
+  "module": "v0.1.0-test.2 (proposed, not published)",
+  "state": "waiting-user",
   "branch": "FreeBuff",
-  "validated_commit": "ab4134a1927096b3e237ea9a6d988fb11ab77079",
-  "tag": "v0.1.0-test.1",
+  "validated_commit": "HEAD-TBD (this file was updated before the commit; see PROGRESS.md for the final SHA)",
+  "tag": "v0.1.0-test.2",
+  "tag_published": false,
   "main_modified": false,
   "tests": {
-    "python": "82 passed",
-    "android_jvm": "17 passed",
+    "python": "95 passed (82 previous + reconnect/reservation/digest-policy additions)",
+    "android_jvm": "17 passed + 5 new ReconnectPolicy tests (run: ./gradlew :app:testDebugUnitTest quiet, exit 0)",
     "android_lint": "not run in this pass",
     "instrumented": "blocked: no device",
-    "hardware": "blocked: no phone",
-    "ci": "not run on this commit"
+    "hardware": "blocked: no phone, no compositor; see needs_user",
+    "ci": "not run from the cloud build host (workflow updated to the single canonical pipeline; first run must happen on GitHub)"
   },
   "artifacts": {
-    "apk": "dist/continuity-android-debug.apk (29,286,743 B, debug-signed, not device-tested)",
-    "appimage": "dist/continuity-linux-x86_64.AppImage (98,171,384 B, self-contained, self-test passed)",
-    "arch": "dist/continuity-linux-x86_64.pkg.tar.zst (140,757 B, not install-tested)",
-    "portable": "dist/continuity-linux-x86_64-portable.tar.zst (141,875 B, host Qt needed for UI)"
+    "apk": "dist/continuity-android-debug.apk (29,304,123 B, debug-signed, rebuilt with reconnect + approval fixes, not device-tested)",
+    "appimage": "dist/continuity-linux-x86_64.AppImage (98,195,960 B, self-contained, in-image self-test passed)",
+    "arch": "dist/continuity-linux-x86_64.pkg.tar.zst (159,978 B, makepkg-ready layout only, NOT makepkg-built or install-tested)",
+    "portable": "dist/continuity-linux-x86_64-portable.tar.zst (161,044 B, host Qt needed for UI)"
   },
   "needs_user": [
-    "Install the APK on the Mi 12 (HyperOS) and pair; report any handshake or transfer failure",
-    "Run the AppImage on Arch/Hyprland and confirm the QML window and Dolphin action",
-    "Build packaging/PKGBUILD with makepkg on Arch and report packaging fixes"
+    "Publish approval: create tag v0.1.0-test.2 on the validated commit and upload the 4 assets + SHA256SUMS + BUILD-MANIFEST.json + docs/VALIDATION_REPORT.md (existing v0.1.0-test.1 must not move)",
+    "Install the APK on the Mi 12 (HyperOS) and execute journeys B01-B07 incl. reconnect after Wi-Fi toggle and sleep/wake",
+    "Run the AppImage on Arch/Hyprland (incl. a path with spaces) and confirm the QML window, Quickshell panel, Dolphin action",
+    "Distrobox Arch build: `distrobox create -n arch -i ghcr.io/archlinux/archlinux:latest` then inside the box `bash scripts/package-linux.sh` so the Arch package is produced and install-tested by real makepkg (impossible in the cloud VM: no distrobox/podman, docker socket is root:docker 660, sudo is unavailable)",
+    "Run the CI workflow (push) and watch the linux job: verify-artifacts + AppImage type/exec/self-test steps"
   ],
   "release_url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.1",
   "tag_target_commit": "8b1313371caa4b358dc63f34c85fc6cd7c1b1d3b",
-  "docs_head_note": "the tag points at the commit the assets were built from; documentation-only commits may follow it"
+  "docs_head_note": "v0.1.0-test.1 stays untouched; the v0.1.0-test.2 candidate is a separate un-published tag proposal"
 }

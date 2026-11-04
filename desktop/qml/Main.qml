@@ -83,11 +83,10 @@ ApplicationWindow {
     function checkPrompts() {
         root.pendingPairing = (status.pairing && status.pairing.pending && status.pairing.pending.length > 0)
             ? status.pairing.pending[0] : null
-        var transfers = status.transfers || []
-        var offer = null
-        for (var i = 0; i < transfers.length; i++)
-            if (transfers[i].state === "pending") offer = transfers[i]
-        root.pendingTransfer = offer
+        // Pending approval offers live in status.pending_transfers — the daemon exposes them there
+        // because the snapshot is the authoritative surface (they are not yet in state.transfers).
+        var offers = status.pending_transfers || []
+        root.pendingTransfer = offers.length > 0 ? offers[0] : null
     }
 
     // The daemon writes {"port":…,"token":…} to a 0600 runtime file. Reading it here keeps the
@@ -153,7 +152,7 @@ ApplicationWindow {
                 }
                 Text {
                     text: root.status.daemon
-                        ? "protocol v1 · port " + root.status.daemon.port + " · "
+                        ? "protocol v2 · port " + root.status.daemon.port + " · "
                           + root.status.daemon.capabilities.length + " capabilities"
                         : "daemon not reachable"
                     color: root.status.daemon ? Theme.subtext : Theme.error
@@ -207,8 +206,12 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     color: Theme.text
                     text: root.pendingPairing
-                        ? "Pairing request from " + root.pendingPairing.fingerprint.substring(0, 12)
-                          + "… — confirm the code shown on the phone, then approve."
+                        ? "Pairing request from "
+                          + (root.pendingPairing.device && root.pendingPairing.device.name
+                             ? root.pendingPairing.device.name : root.pendingPairing.fingerprint.substring(0, 12) + "…")
+                          + (root.pendingPairing.sas && root.pendingPairing.sas.digits
+                             ? " — compare this code with the phone: " + root.pendingPairing.sas.digits
+                             : " — confirm the code shown on the phone, then approve.")
                         : ""
                 }
                 Button {
@@ -245,12 +248,12 @@ ApplicationWindow {
                 Button {
                     text: "Accept"
                     onClicked: root.command("file.accept",
-                        { transfer_id: root.pendingTransfer.id, accept: true })
+                        { transfer_id: root.pendingTransfer.transfer_id, accept: true })
                 }
                 Button {
                     text: "Decline"
                     onClicked: root.command("file.accept",
-                        { transfer_id: root.pendingTransfer.id, accept: false })
+                        { transfer_id: root.pendingTransfer.transfer_id, accept: false })
                 }
             }
         }

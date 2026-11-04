@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-# Build the Linux x86_64 deliverables: portable .tar.zst, Arch .pkg.tar.zst and (when appimagetool
-# can be fetched) an AppImage.
+# Build the Linux x86_64 deliverables: portable .tar.zst and Arch .pkg.tar.zst.
+#
+# The AppImage is NOT built here: scripts/build-appimage.sh is the one canonical AppImage builder
+# (self-contained CPython + PySide6). This script can delegate to it and — unless explicitly skipped
+# with CONTINUITY_SKIP_APPIMAGE=1 — treats its failure as fatal for the whole packaging run, so CI
+# can never print a green line while the AppImage deliverable is missing.
 #
 # What is bundled: the daemon package, the QML client, launchers, desktop entry, icon, licence.
-# What is NOT bundled: Qt 6 / a Python interpreter. Those are declared host dependencies, because a
-# real self-contained AppImage needs a relocatable CPython plus Qt, which cannot be installed on this
-# build host (no root). The script never pretends otherwise; see dist/BUILD-MANIFEST.json.
+# What is NOT bundled (portable/Arch): Qt 6 / a Python interpreter; those are declared host
+# dependencies. See dist/BUILD-MANIFEST.json.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -174,38 +177,15 @@ rm -f "$pkg_out"
 zstd_tar "$PKG" "$pkg_out"
 echo "arch:     $pkg_out ($(stat -c%s "$pkg_out") bytes)"
 
-# ------------------------------------------------------------------ AppImage (best effort)
+# ------------------------------------------------------------------ AppImage: one canonical builder
 appimage_out="$DIST/continuity-linux-$ARCH.AppImage"
-if [ "${CONTINUITY_SKIP_APPIMAGE:-0}" != "1" ]; then
-  TOOLS="$ROOT/.toolchain/appimage"
-  TOOL="$TOOLS/appimagetool"
-  if [ ! -x "$TOOL" ]; then
-    mkdir -p "$TOOLS"
-    if curl -fL --retry 2 --max-time 120 -o "$TOOLS/appimagetool.AppImage" \
-        "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"; then
-      chmod +x "$TOOLS/appimagetool.AppImage"
-      (cd "$TOOLS" && ./appimagetool.AppImage --appimage-extract >/dev/null 2>&1) || true
-      [ -x "$TOOLS/squashfs-root/AppRun" ] && cp "$TOOLS/squashfs-root/AppRun" "$TOOL" || true
-    fi
-  fi
-  if [ -x "$TOOL" ]; then
-    APPDIR="$WORK/AppDir"
-    rm -rf "$APPDIR"
-    cp -a "$STAGE" "$APPDIR"
-    cp "$APPDIR/share/icons/hicolor/scalable/apps/continuity.svg" "$APPDIR/continuity.svg"
-    cp "$APPDIR/continuity.svg" "$APPDIR/.DirIcon" 2>/dev/null || true
-    cat > "$APPDIR/AppRun" <<'SH'
-#!/bin/sh
-HERE="$(dirname "$(readlink -f "$0")")"
-exec "$HERE/continuity-run" "$@"
-SH
-    chmod 0755 "$APPDIR/AppRun"
-    ARCH="$ARCH" "$TOOL" --no-appstream "$APPDIR" "$appimage_out" >/dev/null 2>&1 \
-      && echo "appimage: $appimage_out ($(stat -c%s "$appimage_out" 2>/dev/null || echo 0) bytes)" \
-      || echo "appimage: FAILED (appimagetool could not build the image)"
-  else
-    echo "appimage: SKIPPED (appimagetool unavailable in this environment)"
-  fi
+if [ "${CONTINUITY_SKIP_APPIMAGE:-0}" = "1" ]; then
+  echo "appimage: SKIPPED (CONTINUITY_SKIP_APPIMAGE=1) — the AppImage deliverable is NOT built"
+else
+  echo "== invoking the canonical AppImage builder (failure is fatal)"
+  bash scripts/build-appimage.sh
+  test -s "$appimage_out"
+  echo "appimage: $appimage_out ($(stat -c%s "$appimage_out") bytes)"
 fi
 
 # ------------------------------------------------------------------ manifest + checksums
@@ -214,6 +194,10 @@ rm -f SHA256SUMS
 for asset in continuity-android-debug.apk continuity-linux-x86_64*; do
   [ -f "$asset" ] && sha256sum "$asset" >> SHA256SUMS
 done
+appimage_statements="{\"name\": \"continuity-linux-$ARCH.AppImage\", \"type\": \"appimage\", \"bundles_python_runtime\": true, \"bundles_qt\": true, \"builder\": \"scripts/build-appimage.sh\"}"
+if [ "${CONTINUITY_SKIP_APPIMAGE:-0}" = "1" ]; then
+  appimage_statements="{\"name\": \"continuity-linux-$ARCH.AppImage\", \"type\": \"appimage\", \"missing\": true, \"reason\": \"CONTINUITY_SKIP_APPIMAGE=1\"}"
+fi
 cat > BUILD-MANIFEST.json <<JSON
 {
   "version": "$VERSION",
@@ -224,11 +208,11 @@ cat > BUILD-MANIFEST.json <<JSON
   "assets": [
     {"name": "continuity-android-debug.apk", "type": "apk", "signing": "debug"},
     {"name": "continuity-linux-x86_64-portable.tar.zst", "type": "portable", "bundles_qt": false},
-    {"name": "continuity-linux-x86_64.pkg.tar.zst", "type": "arch-package", "bundles_qt": false},
-    {"name": "continuity-linux-x86_64.AppImage", "type": "appimage", "bundles_qt": false}
+    {"name": "continuity-linux-x86_64.pkg.tar.zst", "type": "arch-package", "bundles_qt": false, "built_by_makepkg": false},
+    $appimage_statements
   ],
   "host_dependencies": ["python>=3.11", "python-cryptography", "python-zeroconf", "python-qrcode", "qt6-declarative or PySide6-Essentials"],
-  "notes": "Qt and Python are declared dependencies, not bundled: this host has no root to install Qt and no relocatable CPython was staged."
+  "notes": "Portable and Arch declare Qt/Python as host dependencies. The AppImage bundles CPython and PySide6 (build-appimage.sh). The Arch package is assembled from the PKGBUILD layout by this script and has NOT been produced or install-tested by makepkg user - environment restriction; see docs/VALIDATION_REPORT.md."
 }
 JSON
 cat SHA256SUMS

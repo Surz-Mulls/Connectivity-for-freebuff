@@ -10,6 +10,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.media.RingtoneManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
@@ -61,6 +63,10 @@ class ContinuityService : Service() {
     private val sessions = Collections.synchronizedList(mutableListOf<ContinuitySession>())
     private val running = AtomicBoolean(false)
     private var acceptJob: Job? = null
+    // Automatic reconnect to the last paired desktop (bounded exponential backoff, § policy):
+    private val reconnectPolicy = ReconnectPolicy()
+    private var reconnectAttempts = 0
+    private var reconnectJob: Job? = null
     private var pairingDeferred: CompletableDeferred<Boolean>? = null
     private val receiveDir by lazy { File(getExternalFilesDir(null), "received").apply { mkdirs() } }
     private val chunkBuffers = java.util.concurrent.ConcurrentHashMap<String, File>()
@@ -76,6 +82,23 @@ class ContinuityService : Service() {
                 addAction(ACTION_FILE_ACCEPT)
                 addAction(ACTION_FILE_REJECT)
             }, Context.RECEIVER_NOT_EXPORTED)
+        cleanupOrphanStaging()
+    }
+
+    /**
+     * Resume is in-session only: a restart cannot resume a transfer, so staging files left by a
+     * previous process are removed here. Documented limitation, not durable resume.
+     */
+    private fun cleanupOrphanStaging() {
+        val orphanCount = receiveDir.listFiles { file ->
+            file.name.startsWith(".") && file.name.endsWith(".part")
+        }?.size ?: 0
+        if (orphanCount > 0) {
+            receiveDir.listFiles { file ->
+                file.name.startsWith(".") && file.name.endsWith(".part")
+            }?.forEach { runCatching { it.delete() } }
+            note("removed $orphanCount orphaned staging file(s)")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -86,6 +109,8 @@ class ContinuityService : Service() {
                 val fingerprint = intent.getStringExtra("fingerprint")
                 if (host.isNotEmpty() && port > 0) {
                     store.expectedFingerprintValue = fingerprint
+                    reconnectAttempts = 0        // an explicit user action resets the backoff series
+                    cancelReconnect()
                     connect(host, port)
                 }
             }
@@ -105,8 +130,10 @@ class ContinuityService : Service() {
 
     override fun onDestroy() {
         running.set(false)
+        cancelReconnect()
         runCatching { unregisterReceiver(fileDecisionReceiver) }
-        fileDecision.values.forEach { it.complete(false) }
+        fileDecision.values.forEach { it.deferred.complete(false) }
+        fileDecision.clear()
         acceptJob?.cancel()
         runCatching { serverSocket?.close() }
         sessions.forEach { it.stop() }
@@ -176,10 +203,41 @@ class ContinuityService : Service() {
                 }
             } catch (exc: Exception) {
                 note("connect failed: ${exc.message}")
+                scheduleReconnect("connect failed: ${exc.message}")
                 return@launch
             }
             store.lastDesktop = "$host:$port"
             attach(socket, initiator = true)
+        }
+    }
+
+    // -------------------------------------------------- automatic reconnect (§ policy)
+    private fun cancelReconnect() {
+        reconnectJob?.cancel()
+        reconnectJob = null
+    }
+
+    /** A trusted session that ended on its own comes back with bounded backoff and jitter. */
+    private fun scheduleReconnect(reason: String) {
+        if (!running.get()) return
+        val target = store.lastDesktop ?: return
+        val host = target.substringBeforeLast(":")
+        val port = target.substringAfterLast(":").toIntOrNull() ?: return
+        // Pinned identity required; a revoked peer is never silently re-paired or re-trusted.
+        val fingerprint = store.expectedFingerprintValue ?: return
+        if (store.isRevoked(fingerprint)) return
+        if (reconnectPolicy.exhausted(reconnectAttempts)) {
+            note("reconnect gave up after $reconnectAttempts attempts — $reason")
+            return
+        }
+        cancelReconnect()
+        val delay = reconnectPolicy.withinJitter(reconnectPolicy.delayFor(reconnectAttempts + 1))
+        val attempt = reconnectAttempts + 1
+        reconnectJob = scope.launch {
+            kotlinx.coroutines.delay(delay)
+            if (!running.get() || store.isRevoked(fingerprint)) return@launch
+            note("reconnecting to $host:$port (attempt $attempt/$reconnectPolicy.maxAttempts)")
+            connect(host, port)
         }
     }
 
@@ -197,6 +255,10 @@ class ContinuityService : Service() {
                 sessions.remove(closed)
                 AppState.status.value = statusJson(port = serverSocket?.localPort ?: 0)
                 note(failure?.let { "session closed: $it" } ?: "session closed")
+                if (initiator) {
+                    reconnectAttempts += 1
+                    scheduleReconnect(failure ?: "session closed")
+                }
             }
         )
         sessions.add(session)
@@ -205,6 +267,10 @@ class ContinuityService : Service() {
 
     private fun onSessionReady(session: ContinuitySession) {
         val peer = session.peer ?: return
+        if (peer.trusted) {
+            reconnectAttempts = 0      // success resets the backoff series
+            cancelReconnect()
+        }
         note("connected to ${peer.name} (${if (peer.trusted) "pinned" else "unpaired"})")
         val desktop = JSONObject()
             .put("name", peer.name)
@@ -266,6 +332,19 @@ class ContinuityService : Service() {
                 JSONObject().put("ok", true)
             }
             Protocol.Msg.STATUS_REQUEST -> batteryStatus()
+            Protocol.Msg.NOTIFY_ACTION -> {
+                // Reply/dismiss about a mirrored notification goes through the real listener.
+                val key = body.optString("key")
+                val actionId = body.optString("action_id")
+                if (key.isEmpty()) {
+                    JSONObject().put("ok", false).put("error", "notification key required")
+                } else {
+                    val done = if (actionId == "dismiss") NotificationRelay.dismiss(key)
+                               else NotificationRelay.reply(
+                    key, actionId, body.optString("reply_text", ""))
+                    JSONObject().put("ok", done)
+                }
+            }
             Protocol.Msg.MEDIA_COMMAND -> {
                 session.sendError("capability.denied", "media bridge not implemented in this build")
                 null
@@ -301,20 +380,44 @@ class ContinuityService : Service() {
         val peer: String,
         val staging: File,
         val destination: File,
-        var written: Long = 0L
+        var written: Long = 0L,
+        var state: String = "receiving"   // receiving | finalising
     )
+
+    /** One consent dialog, bound to (peer fingerprint, transfer id) so it cannot be hijacked. */
+    private data class OfferCard(
+        val id: String,
+        val peerFingerprint: String,
+        val peerName: String,
+        val name: String,
+        val size: Long,
+    ) {
+        val key: String get() = "$peerFingerprint|$id"
+        val notificationId: Int get() = key.hashCode()
+    }
+
+    private class PendingApproval(val offer: OfferCard) {
+        val deferred = CompletableDeferred<Boolean>()
+    }
 
     private val incoming = java.util.concurrent.ConcurrentHashMap<String, Incoming>()
     private val transferLock = Any()
     private val fileDecision =
-        java.util.concurrent.ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
+        java.util.concurrent.ConcurrentHashMap<String, PendingApproval>()
+    /** Atomic pre-approval reservation, transfer id -> reserving peer fingerprint. */
+    private val pendingOffers = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val rejectedIds = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     /** Accept/Reject buttons on the incoming-file notification. Not exported: same-app broadcasts. */
     private val fileDecisionReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val id = intent?.getStringExtra("transfer_id") ?: return
-            fileDecision.remove(id)?.complete(intent.action == ACTION_FILE_ACCEPT)
+            val fingerprint = intent.getStringExtra("fingerprint") ?: return
+            val approval = fileDecision["$fingerprint|$id"] ?: return
+            // The pending approval is bound to peer, name and size; a stale or foreign broadcast
+            // must never resolve somebody else's dialog.
+            if (approval.offer.peerFingerprint != fingerprint) return
+            approval.deferred.complete(intent.action == ACTION_FILE_ACCEPT)
         }
     }
 
@@ -331,6 +434,11 @@ class ContinuityService : Service() {
             return
         }
         synchronized(transferLock) {
+            if (transfer.state != "receiving") {
+                // finalising/already finalised: no more data is accepted, ever
+                session.sendError("limit.exceeded", "transfer is being finalised")
+                return
+            }
             if (header.optLong("offset", -1L) != transfer.written) {
                 session.sendError("protocol.json", "out-of-order chunk")
                 return
@@ -385,31 +493,65 @@ class ContinuityService : Service() {
 
         val now = System.currentTimeMillis()
         pruneRejected(now)
-        if (rejectedIds.containsKey(id)) return rejectOffer(id, "transfer was declined")
+        if (rejectedIds.containsKey("${peer.fingerprint}|$id")) {
+            return rejectOffer(id, "transfer was declined")
+        }
 
+        // Atomic pre-approval reservation keyed (peer fingerprint, id): one consent dialog per
+        // offer. Two concurrent copies cannot both wait for consent and race to create state,
+        // and a second device reusing the id is told it is reserved.
+        val reservationOwner = pendingOffers.putIfAbsent(id, peer.fingerprint)
+        if (reservationOwner != null) {
+            return if (reservationOwner != peer.fingerprint) {
+                rejectOffer(id, "transfer id reserved by another device")
+            } else {
+                JSONObject().put("transfer_id", id).put("offset", 0).put("accept", false)
+                    .put("reason", "awaiting approval")
+            }
+        }
+        // Pending offers count toward the cap; approval-waiting offers must not bypass it.
+        if (incoming.size + pendingOffers.size > TransferPolicy.MAX_CONCURRENT) {
+            pendingOffers.remove(id, peer.fingerprint)
+            return rejectOffer(id, "too many concurrent transfers")
+        }
+
+        val offer = OfferCard(id, peer.fingerprint, peer.name, name, size)
         val autoAccept = store.filesAutoAccept && peer.trusted && peer.fingerprint.isNotEmpty()
-        val approved = autoAccept || awaitApproval(id, name, size, peer.name, peer.fingerprint)
-        if (!approved) {
-            rejectedIds[id] = now
+        val rejectedByUser = !autoAccept && !awaitOfferDecision(offer)
+        if (rejectedByUser) {
+            pendingOffers.remove(id, peer.fingerprint)
+            rejectedIds[offer.key] = now
             AppState.note("declined incoming file: $name")
             return rejectOffer(id, "rejected")
         }
 
         synchronized(transferLock) {
-            if (incoming.size >= TransferPolicy.MAX_CONCURRENT) {
+            if (incoming.size >= TransferPolicy.MAX_CONCURRENT ||
+                pendingOffers.size > TransferPolicy.MAX_CONCURRENT) {
+                pendingOffers.remove(id, peer.fingerprint)
                 return rejectOffer(id, "too many concurrent transfers")
             }
             val root = receiveDir.canonicalFile
             root.mkdirs()
-            if (!root.isDirectory) return rejectOffer(id, "receive directory unavailable")
+            if (!root.isDirectory) {
+                pendingOffers.remove(id, peer.fingerprint)
+                return rejectOffer(id, "receive directory unavailable")
+            }
             val destination = TransferPolicy.uniqueDestination(root, name)
-                ?: return rejectOffer(id, "no free destination name")
+            if (destination == null) {
+                pendingOffers.remove(id, peer.fingerprint)
+                return rejectOffer(id, "no free destination name")
+            }
+            pendingOffers.remove(id, peer.fingerprint)   // reservation became an active transfer
             val staging = File(root, ".${destination.name}.$id.part")
             if (!TransferPolicy.isInside(root, staging)) return rejectOffer(id, "path escape")
+
             try {
                 if (staging.exists()) staging.delete()
                 if (!staging.createNewFile()) error("cannot create staging file")
-                staging.setReadable(false, false)
+                // NOTE: no setReadable(false, false) here — it clears the owner read bit and
+                // breaks reopening/hashing our own staged file (see Identity.kt). The file lives
+                // in app-private storage and is already unreadable to other apps.
             } catch (exc: java.io.IOException) {
                 return rejectOffer(id, "cannot create staging file")
             }
@@ -424,42 +566,47 @@ class ContinuityService : Service() {
         rejectedIds.entries.removeIf { now - it.value > REJECTED_TTL_MS }
     }
 
-    private fun awaitApproval(id: String, name: String, size: Long,
-                                      peerName: String, peerFingerprint: String): Boolean {
-        val deferred = CompletableDeferred<Boolean>()
-        fileDecision[id] = deferred
-        postOfferNotification(id, name, size, peerName)
+    private fun awaitOfferDecision(offer: OfferCard): Boolean {
+        val approval = PendingApproval(offer)
+        fileDecision[offer.key] = approval
+        postOfferNotification(offer)
         return try {
-            // The session read loop is a plain thread, so this waits on the caller's thread. That is
-            // safe: no chunk can arrive before the offer is answered, and the 45 s cap keeps the
-            // wait under the sender's 60 s offer deadline.
-            runBlocking { withTimeoutOrNull(APPROVAL_TIMEOUT_MS) { deferred.await() } } ?: false
+            // The session read loop is a plain thread, so this waits on the caller's thread. That
+            // is safe: no chunk can arrive before the offer is answered, and the 45 s cap keeps
+            // the wait under the sender's 60 s offer deadline.
+            runBlocking { withTimeoutOrNull(APPROVAL_TIMEOUT_MS) { approval.deferred.await() } }
+                ?: false
         } finally {
-            fileDecision.remove(id)
+            fileDecision.remove(offer.key)
             (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-                .cancel(id.hashCode())
+                .cancel(offer.notificationId)
         }
     }
 
-    private fun postOfferNotification(id: String, name: String, size: Long, peerName: String) {
-        val accept = PendingIntent.getBroadcast(this, id.hashCode(),
-            Intent(ACTION_FILE_ACCEPT).setPackage(packageName).putExtra("transfer_id", id),
+    private fun postOfferNotification(offer: OfferCard) {
+        val accept = PendingIntent.getBroadcast(this, offer.notificationId,
+            Intent(ACTION_FILE_ACCEPT).setPackage(packageName)
+                .putExtra("transfer_id", offer.id)
+                .putExtra("fingerprint", offer.peerFingerprint),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val reject = PendingIntent.getBroadcast(this, id.hashCode() xor 0x5555,
-            Intent(ACTION_FILE_REJECT).setPackage(packageName).putExtra("transfer_id", id),
+        val reject = PendingIntent.getBroadcast(this, offer.notificationId xor 0x5555,
+            Intent(ACTION_FILE_REJECT).setPackage(packageName)
+                .putExtra("transfer_id", offer.id)
+                .putExtra("fingerprint", offer.peerFingerprint),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("File from $peerName")
-            .setContentText("$name · $size bytes — accept or reject")
+            .setContentTitle("File from ${offer.peerName}")
+            .setContentText("${offer.name} · ${offer.size} bytes — accept or reject")
             .setStyle(Notification.BigTextStyle().bigText(
-                "$peerName wants to send \"$name\" ($size bytes). Nothing is written until you accept."))
+                "${offer.peerName} wants to send \"${offer.name}\" (${offer.size} bytes). " +
+                    "Nothing is written until you accept."))
             .setOngoing(true)
             .addAction(Notification.Action.Builder(0, "Accept", accept).build())
             .addAction(Notification.Action.Builder(0, "Reject", reject).build())
             .build()
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .notify(id.hashCode(), notification)
+            .notify(offer.notificationId, notification)
     }
 
     private fun failTransfer(id: String, transfer: Incoming?, error: String): JSONObject {
@@ -473,16 +620,48 @@ class ContinuityService : Service() {
             return JSONObject().put("transfer_id", id).put("ok", false)
                 .put("error", "invalid transfer id")
         }
-        val transfer = incoming.remove(id)
+        // file.done requires the sender's digest: 64 hex characters, matching the offer. A missing
+        // digest is a protocol error, never "trust the staged bytes".
+        val claimed = body.optString("sha256", "")
+        if (!TransferPolicy.isValidDigest(claimed)) {
+            return JSONObject().put("transfer_id", id).put("ok", false)
+                .put("error", "invalid sha256")
+        }
+        // Peer ownership is validated BEFORE anything destructive happens. A foreign trusted
+        // peer must not be able to remove, fail or finalise somebody else's transfer by
+        // reusing its id — and its failed attempt must not delete that other transfer's staging
+        // file either.
+        var finalising: Incoming? = null
+        synchronized(transferLock) {
+            val transfer = incoming[id]
+                ?: return JSONObject().put("transfer_id", id).put("ok", false)
+                    .put("error", "unknown transfer")
+            if (session.peer?.fingerprint != transfer.peer) {
+                session.sendError("identity.mismatch", "transfer belongs to another device")
+                return JSONObject().put("transfer_id", id).put("ok", false)
+                    .put("error", "transfer belongs to another device")
+            }
+            if (transfer.state != "receiving") {
+                return JSONObject().put("transfer_id", id).put("ok", false)
+                    .put("error", "transfer is being finalised")
+            }
+            if (transfer.written != transfer.size) {
+                return JSONObject().put("transfer_id", id).put("ok", false)
+                    .put("error", "transfer is incomplete")
+            }
+            if (!claimed.equals(transfer.digest, true)) {
+                return failTransfer(id, transfer, "offered digest changed")
+            }
+            // Atomic transition receiving → finalising while every chunk handler holds the same
+            // lock: no chunk can be written past this point, and no late chunk can re-enter
+            // because the record is gone from ``incoming``.
+            transfer.state = "finalising"
+            incoming.remove(id)
+            finalising = transfer
+        }
+        val transfer = finalising
             ?: return JSONObject().put("transfer_id", id).put("ok", false)
                 .put("error", "unknown transfer")
-        if (session.peer?.fingerprint != transfer.peer) {
-            return failTransfer(id, transfer, "transfer belongs to another device")
-        }
-        val claimed = body.optString("sha256", "")
-        if (claimed.isNotEmpty() && !claimed.equals(transfer.digest, true)) {
-            return failTransfer(id, transfer, "offered digest changed")
-        }
         val measured = try {
             TransferPolicy.digestOf(transfer.staging)
         } catch (exc: java.io.IOException) {
@@ -640,7 +819,11 @@ class ContinuityService : Service() {
         }
     }
 
-    private fun trustedSession(): ContinuitySession? =
+    /**
+     * The currently authenticated, trusted desktop session. Also used by [NotificationRelay];
+     * sessions stay owned by the service, this only hands out the reference for event dispatch.
+     */
+    fun trustedSession(): ContinuitySession? =
         sessions.firstOrNull { it.peer?.trusted == true }
 
     private fun readClipboard(): String? {
@@ -648,14 +831,21 @@ class ContinuityService : Service() {
         return manager.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
     }
 
+    /**
+     * Sets the clipboard and waits for the main-thread write to finish. The old version fired the
+     * write on the main looper and returned ``true`` unconditionally; a failed or never-executed
+     * write must be reported as failure instead of claiming success.
+     */
     private fun setClipboard(text: String): Boolean {
-        var applied = false
-        Handler(Looper.getMainLooper()).post {
-            val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            manager.setPrimaryClip(ClipData.newPlainText("Continuity", text))
-            applied = true
-        }
-        return true
+        return runCatching {
+            runBlocking(Dispatchers.Main.immediate) {
+                kotlinx.coroutines.withTimeoutOrNull(2_000L) {
+                    val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    manager.setPrimaryClip(ClipData.newPlainText("Continuity", text))
+                    true
+                } ?: false
+            }
+        }.getOrDefault(false)
     }
 
     private fun ring(seconds: Int) {
@@ -681,15 +871,26 @@ class ContinuityService : Service() {
             .notify(url.hashCode(), notification)
     }
 
+    /** Measured, not asserted: the network type and foreground state come from the platform. */
     private fun batteryStatus(): JSONObject {
         val manager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        val connectivity = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val capabilities = connectivity.getNetworkCapabilities(connectivity.activeNetwork)
+        val network = when {
+            capabilities == null -> "unknown"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH) -> "bluetooth"
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
+            else -> "other"
+        }
         return JSONObject()
             .put("battery", JSONObject()
                 .put("level", manager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY))
                 .put("charging", manager.isCharging))
-            .put("network", "wifi")
+            .put("network", network)
             .put("app_version", "0.1.0")
-            .put("foreground", true)
+            .put("foreground", AppState.activityVisible)
     }
 
     private fun statusJson(port: Int): JSONObject = JSONObject()

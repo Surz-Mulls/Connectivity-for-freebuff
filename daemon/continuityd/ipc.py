@@ -13,11 +13,13 @@ validated JSON field.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import os
 import secrets
 import socket
 import struct
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -30,8 +32,12 @@ HTTP_PORT_FILE = "http.token"
 
 
 class IPCServer:
-    def __init__(self, manager):
+    def __init__(self, manager, stop_event: asyncio.Event | None = None):
         self.manager = manager
+        #: set by the ``shutdown`` command; the daemon main loop performs the actual teardown so
+        #: IPC servers are closed too (a shutdown that stops only the manager would leave the
+        #: daemon process waiting on its event forever)
+        self.stop_event = stop_event
         self.server: asyncio.Server | None = None
         self.http_server: asyncio.Server | None = None
         self.token = secrets.token_urlsafe(32)
@@ -40,6 +46,14 @@ class IPCServer:
 
     # ---------------------------------------------------------------- unix socket
     async def start(self) -> dict:
+        root = runtime_dir()
+        root.mkdir(parents=True, exist_ok=True)
+        if root.is_symlink() or (os.getuid() >= 0 and root.stat().st_uid != os.getuid()):
+            raise RuntimeError(f"runtime directory {root} is not owned by this user")
+        os.chmod(root, 0o700)
+        for candidate in (ipc_socket_path(), self.token_file):
+            if candidate.is_symlink():
+                raise RuntimeError(f"refusing to write through a symlink: {candidate}")
         path = ipc_socket_path()
         path.unlink(missing_ok=True)
         self.server = await asyncio.start_unix_server(self._handle_client, path=str(path),
@@ -137,7 +151,9 @@ class IPCServer:
                     break
                 key, _, value = line.decode("latin-1").partition(":")
                 headers[key.strip().lower()] = value.strip()
-            if headers.get("authorization", "") != f"Bearer {self.token}":
+            expected = f"Bearer {self.token}".encode()
+            provided = headers.get("authorization", "").encode()
+            if not hmac.compare_digest(expected, provided):
                 await _http_reply(writer, 401, {"error": "auth.required"})
                 return
             if method == "GET" and target.startswith("/api/status"):
@@ -277,8 +293,10 @@ class IPCServer:
         return await self.manager.dex.probe()
 
     async def _cmd_dex_start(self, command: dict) -> dict:
+        serial = command.get("serial")
         return await self.manager.dex.start(mode=str(command.get("mode", "virtual_display")),
-                                            package=command.get("package"))
+                                            package=command.get("package"),
+                                            serial=str(serial) if serial else None)
 
     async def _cmd_dex_stop(self, command: dict) -> dict:
         return await self.manager.dex.stop()
@@ -295,6 +313,11 @@ class IPCServer:
                                                       str(command.get("text", "")))
 
     async def _cmd_shutdown(self, command: dict) -> dict:
+        if self.stop_event is not None:
+            # The daemon main loop owns the full teardown (manager + IPC servers). Triggering only
+            # manager.stop() from here would leave the process waiting on its stop event forever.
+            self.stop_event.set()
+            return {"stopping": True}
         asyncio.create_task(self._shutdown())
         return {"stopping": True}
 
@@ -317,13 +340,20 @@ async def _http_reply(writer: asyncio.StreamWriter, status: int, payload: dict) 
 
 
 def _same_uid(writer: asyncio.StreamWriter) -> bool:
-    """SO_PEERCRED check: the socket is 0600, but verify anyway."""
+    """SO_PEERCRED check: the socket is 0600, but verify anyway. Linux fails CLOSED."""
+    sock = writer.get_extra_info("socket")
+    if sock is None:
+        return False
+    if not hasattr(socket, "SO_PEERCRED"):
+        # Non-Linux fallback (explicit and documented): there is no peer-credential API, so we
+        # rely on the 0600 socket inside a 0700 runtime directory owned by this user. Any new
+        # port must re-verify this platform pass with its own platform API.
+        return sys.platform != "linux"
     try:
-        sock = writer.get_extra_info("socket")
-        if sock is None:
-            return False
         raw = sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
+        if len(raw) != struct.calcsize("3i"):
+            return False
         _pid, uid, _gid = struct.unpack("3i", raw)
         return uid == os.getuid()
     except (AttributeError, OSError):
-        return True  # non-Linux fallback: rely on filesystem permissions
+        return False  # on Linux, failure to verify credentials must fail closed

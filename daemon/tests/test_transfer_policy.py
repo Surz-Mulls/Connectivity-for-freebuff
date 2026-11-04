@@ -164,8 +164,10 @@ async def test_same_name_finishing_together_never_overwrites(tmp_path):
     second, second_payload, _ = await _offer(service, session, name="note.txt", payload=b"second")
     await service.on_chunk(session, {"transfer_id": first, "offset": 0}, first_payload)
     await service.on_chunk(session, {"transfer_id": second, "offset": 0}, second_payload)
-    assert (await service.on_done(session, {"transfer_id": first}))["ok"] is True
-    assert (await service.on_done(session, {"transfer_id": second}))["ok"] is True
+    assert (await service.on_done(session, {
+        "transfer_id": first, "sha256": hashlib.sha256(first_payload).hexdigest()}))["ok"] is True
+    assert (await service.on_done(session, {
+        "transfer_id": second, "sha256": hashlib.sha256(second_payload).hexdigest()}))["ok"] is True
 
     files = sorted(p.name for p in (tmp_path / "inbox").iterdir())
     assert files == ["note-1.txt", "note.txt"]
@@ -182,7 +184,8 @@ async def test_destination_appearing_after_offer_is_not_replaced(tmp_path):
     await service.on_chunk(session, {"transfer_id": transfer_id, "offset": 0}, payload)
     # Someone creates the destination while the transfer is in flight.
     (tmp_path / "inbox" / "report.pdf").write_bytes(b"existing")
-    result = await service.on_done(session, {"transfer_id": transfer_id})
+    result = await service.on_done(session, {
+        "transfer_id": transfer_id, "sha256": hashlib.sha256(payload).hexdigest()})
     assert result["ok"] is True
     assert (tmp_path / "inbox" / "report.pdf").read_bytes() == b"existing"
     assert (tmp_path / "inbox" / "report-1.pdf").read_bytes() == b"new"

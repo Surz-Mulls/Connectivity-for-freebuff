@@ -94,7 +94,10 @@ async def test_chunk_integrity_failure_leaves_no_file(tmp_path):
     })
     assert offer["accept"] is True
     await service.on_chunk(fake_session, {"transfer_id": "22222222-2222-4222-8222-222222222222", "offset": 0}, payload)
-    result = await service.on_done(fake_session, {"transfer_id": "22222222-2222-4222-8222-222222222222"})
+    result = await service.on_done(fake_session, {
+        "transfer_id": "22222222-2222-4222-8222-222222222222",
+        "sha256": hashlib.sha256(b"different").hexdigest(),
+    })
     assert result["ok"] is False
     received = Path(settings.receive_dir)
     assert not (received / "note.txt").exists()
@@ -113,7 +116,9 @@ async def test_successful_transfer_writes_file(tmp_path):
         "sha256": digest,
     })
     await service.on_chunk(fake_session, {"transfer_id": "33333333-3333-4333-8333-333333333333", "offset": 0}, payload)
-    result = await service.on_done(fake_session, {"transfer_id": "33333333-3333-4333-8333-333333333333"})
+    result = await service.on_done(fake_session, {
+        "transfer_id": "33333333-3333-4333-8333-333333333333", "sha256": digest,
+    })
     assert result["ok"] is True
     assert (Path(settings.receive_dir) / "data.bin").read_bytes() == payload
 
@@ -130,6 +135,9 @@ async def test_duplicate_names_do_not_overwrite(tmp_path):
         "sha256": hashlib.sha256(payload).hexdigest(),
     })
     await service.on_chunk(fake_session, {"transfer_id": "44444444-4444-4444-8444-444444444444", "offset": 0}, payload)
-    await service.on_done(fake_session, {"transfer_id": "44444444-4444-4444-8444-444444444444"})
+    await service.on_done(fake_session, {
+        "transfer_id": "44444444-4444-4444-8444-444444444444",
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    })
     assert (Path(settings.receive_dir) / "report.pdf").read_bytes() == b"existing"
     assert (Path(settings.receive_dir) / "report-1.pdf").read_bytes() == b"new"

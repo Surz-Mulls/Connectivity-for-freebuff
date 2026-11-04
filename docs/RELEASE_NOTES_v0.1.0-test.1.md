@@ -21,7 +21,7 @@ Verify with `sha256sum -c SHA256SUMS` after downloading all assets.
 
 ```sh
 chmod +x continuity-linux-x86_64.AppImage
-./continuity-linux-x86_64.AppImage daemon &     # terminal 1: the daemon
+./continuity-linux-x86_64.AppImage daemon run &  # terminal 1: the daemon
 ./continuity-linux-x86_64.AppImage              # terminal 2: the Qt/QML client
 ```
 

@@ -13,13 +13,23 @@ Invariants:
   destination) and retries with a deterministic ``name-1.ext``, so two same-name transfers that
   finish together cannot clobber each other or a file created in the meantime;
 * a declined, timed-out or unapproved offer leaves **no** record, staging file or lock behind;
-* at most ``MAX_CONCURRENT`` transfers run, each with a bounded chunk size.
+* an id is reserved atomically *before* the user is asked, so two simultaneous offers with the
+  same id (or from two peers) cannot both reach an approval and create separate state; the
+  reservation is removed again on decline/timeout, so nothing is left behind;
+* limits: at most ``MAX_PER_PEER`` active-or-pending transfers per peer and ``MAX_GLOBAL`` in
+  total, approval-waiting offers included; each chunk is bounded by ``CHUNK_SIZE``;
+* hashing and finalisation of a transfer hold the same per-transfer lock as chunk writes, so
+  ``file.done`` can never finalise while a chunk is still being written in parallel;
+* resume is **in-session** only: if the daemon process restarts, transfers are gone and orphaned
+  ``.part`` staging files are removed at startup. This is documented limitation, not durable
+  resume.
 """
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import os
 import string
 import time
@@ -32,8 +42,13 @@ from .config import CHUNK_SIZE, Settings
 from .protocol import Msg, ProtocolError, sanitize_filename
 from .session import Session, SessionError
 
+log = logging.getLogger("continuityd.transfers")
+
 MAX_FILE_SIZE = 8 * 1024 * 1024 * 1024  # 8 GiB
-MAX_CONCURRENT = 4
+MAX_PER_PEER = 4
+MAX_GLOBAL = 8
+#: legacy name kept for tests/config that reference the single cap
+MAX_CONCURRENT = MAX_PER_PEER
 OFFER_TIMEOUT = 60.0
 CHUNK_TIMEOUT = 600.0
 #: how long a declined offer id stays poisoned, so a replay cannot turn a "no" into a "yes"
@@ -105,8 +120,11 @@ class TransferService:
         self.approver = approver
         self.transfers: dict[str, Transfer] = {}
         self.incoming: dict[str, dict] = {}
+        #: pre-approval reservations keyed (peer, transfer_id): bound the approval wait so a
+        #: duplicate offer for the same id can never open a second consent dialog
+        self._reservations: dict[tuple[str, str], dict] = {}
         self._declined: dict[tuple[str, str], float] = {}
-        self._semaphore = asyncio.Semaphore(MAX_CONCURRENT)
+        self._semaphore = asyncio.Semaphore(MAX_GLOBAL)
         self._locks: dict[str, asyncio.Lock] = {}
         self._finalise_lock = asyncio.Lock()
 
@@ -137,17 +155,35 @@ class TransferService:
         return sum(1 for t in self.transfers.values()
                    if t.state in ("pending", "active") and t.peer == peer)
 
+    def _active_total(self) -> int:
+        pending = sum(1 for r in self._reservations.values() if r["peer"])
+        return pending + sum(1 for t in self.transfers.values()
+                             if t.state in ("pending", "active"))
+
+    def reserved_for_peer(self, peer: str) -> int:
+        return sum(1 for r in self._reservations.values() if r["peer"] == peer)
+
     def _is_declined(self, peer: str, transfer_id: str) -> bool:
-        now = time.time()
-        for key, when in list(self._declined.items()):
-            if now - when > DECLINED_TTL:
-                self._declined.pop(key, None)
+        self._prune_declined()
         return (peer, transfer_id) in self._declined
 
     def _decline(self, peer: str, transfer_id: str, reason: str) -> dict:
         self._declined[(peer, transfer_id)] = time.time()
         self.emit("transfer.rejected", {"id": transfer_id, "peer": peer, "reason": reason})
         return {"transfer_id": transfer_id, "offset": 0, "accept": False, "reason": reason}
+
+    def declined_count(self) -> int:
+        """Bounded tombstone count: pruning keeps the map small over long sessions."""
+        self._prune_declined()
+        return len(self._declined)
+
+    def _prune_declined(self) -> None:
+        now = time.time()
+        expired = [key for key, when in self._declined.items() if now - when > DECLINED_TTL]
+        for key in expired:
+            self._declined.pop(key, None)
+        while len(self._declined) > 512:  # size bound: pop the oldest regardless of age
+            self._declined.pop(next(iter(self._declined)), None)
 
     def _release(self, transfer_id: str) -> None:
         self._locks.pop(transfer_id, None)
@@ -221,10 +257,10 @@ class TransferService:
             raise SessionError("privacy.blocked", "file transfer is disabled")
         peer = _peer_key(session)
         name = sanitize_filename(body.get("name"))
-        try:
-            size = int(body.get("size", -1))
-        except (TypeError, ValueError) as exc:
-            raise ProtocolError("protocol.json", "invalid file size") from exc
+        raw_size = body.get("size", -1)
+        if isinstance(raw_size, bool) or not isinstance(raw_size, int):
+            raise ProtocolError("protocol.json", "invalid file size")
+        size = raw_size
         if size < 0 or size > MAX_FILE_SIZE:
             raise ProtocolError("limit.exceeded", "invalid file size")
         digest = _digest(body.get("sha256"))
@@ -247,25 +283,51 @@ class TransferService:
 
         if self._is_declined(peer, transfer_id):
             raise SessionError("capability.denied", "transfer was already declined")
-        if self._active_count(peer) >= MAX_CONCURRENT:
+        # Approval-waiting offers count toward both limits (§ policy): a peer cannot park an
+        # unlimited number of dialogs, and the global rate is not silently doubled.
+        if self.reserved_for_peer(peer) + self._active_count(peer) >= MAX_PER_PEER:
             raise ProtocolError("limit.exceeded", "too many concurrent transfers")
+        if self._active_total() >= MAX_GLOBAL:
+            raise ProtocolError("limit.exceeded", "too many concurrent transfers")
+
+        reservation = self._reservations.get((peer, transfer_id))
+        if reservation is not None:
+            # Atomic pre-approval reservation: one consent dialog per (peer, id). A second copy
+            # of the same offer must not race into a second approval or a second staging file.
+            if not reservation.get("accepted"):
+                return {"transfer_id": transfer_id, "offset": 0, "accept": False,
+                        "reason": "awaiting approval"}
+            if (reservation["name"], reservation["size"],
+                    reservation["sha256"]) != (name, size, digest):
+                raise ProtocolError("protocol.json", "offer does not match the pending request")
+        else:
+            self._reservations[(peer, transfer_id)] = {
+                "peer": peer, "name": name, "size": size, "sha256": digest,
+                "accepted": False, "ts": time.time(),
+            }
 
         approved = bool(self.settings.files_auto_accept)
         if not approved:
             if self.approver is None:
+                self._reservations.pop((peer, transfer_id), None)
                 return self._decline(peer, transfer_id, "no approval channel")
+            self._reservations[(peer, transfer_id)]["accepted"] = False
             try:
                 approved = bool(await asyncio.wait_for(self.approver({
                     "transfer_id": transfer_id, "name": name, "size": size,
                     "peer": peer_name, "peer_fingerprint": peer,
                 }), timeout=OFFER_TIMEOUT))
             except asyncio.TimeoutError:
+                self._reservations.pop((peer, transfer_id), None)
                 return self._decline(peer, transfer_id, "approval timed out")
             except asyncio.CancelledError:
+                self._reservations.pop((peer, transfer_id), None)
                 raise
             except Exception:  # an approver bug must never auto-accept
+                self._reservations.pop((peer, transfer_id), None)
                 return self._decline(peer, transfer_id, "approval failed")
         if not approved:
+            self._reservations.pop((peer, transfer_id), None)
             return self._decline(peer, transfer_id, "rejected")
 
         root = self._receive_root()
@@ -288,6 +350,7 @@ class TransferService:
                             sha256=digest, peer=peer, path=str(destination), state="active")
         self.transfers[transfer_id] = transfer
         self.emit("transfer.started", transfer.public())
+        self._reservations.pop((peer, transfer_id), None)
         return {"transfer_id": transfer_id, "offset": 0, "accept": True}
 
     async def on_chunk(self, session: Session, header: dict, data: bytes) -> None:
@@ -302,14 +365,16 @@ class TransferService:
             raise SessionError("capability.denied", "transfer was not accepted")
         if not data or len(data) > CHUNK_SIZE:
             raise ProtocolError("limit.exceeded", "invalid chunk size")
-        try:
-            offset = int(header.get("offset", -1))
-        except (TypeError, ValueError) as exc:
-            raise ProtocolError("protocol.json", "invalid chunk offset") from exc
+        raw_offset = header.get("offset", -1)
+        if isinstance(raw_offset, bool) or not isinstance(raw_offset, int):
+            raise ProtocolError("protocol.json", "invalid chunk offset")
+        offset = raw_offset
         lock = self._locks.setdefault(transfer_id, asyncio.Lock())
         async with lock:
             if offset != record["written"]:
                 raise ProtocolError("protocol.json", "out-of-order chunk")
+            if record["written"] == record["size"]:
+                raise ProtocolError("limit.exceeded", "all chunks were received already")
             if record["written"] + len(data) > record["size"]:
                 raise ProtocolError("limit.exceeded", "transfer exceeds the offered size")
             temp = Path(record["temp"])
@@ -330,19 +395,27 @@ class TransferService:
             raise ProtocolError("protocol.unsafe", "unknown transfer")
         if record["peer"] != peer:
             raise SessionError("identity.mismatch", "transfer belongs to another device")
-        claimed = str(body.get("sha256", "")).lower()
-        if claimed and claimed != record["sha256"]:
+        # The completion digest is required: exactly 64 hex characters, matching the offer. A
+        # missing digest must never be treated as "trusted trust the staged bytes" blindly here
+        # either way — the measurement below is compared against it.
+        claimed = _digest(body.get("sha256"))
+        if claimed != record["sha256"]:
             return self._fail(transfer_id, record, transfer, "offered digest changed")
 
-        temp = Path(record["temp"])
-        root = self._receive_root()
+        # Same lock as chunk writes: nothing can finalise while a chunk is still being written,
+        # and nothing can write after the size is complete and while hashing runs.
+        lock = self._locks.get(transfer_id) or asyncio.Lock()
+        destination: Path
         try:
-            self._assert_inside(temp, root)
-            actual_size = temp.stat().st_size if temp.exists() else 0
-            actual_digest = (await asyncio.to_thread(_sha256_file, temp)) if temp.exists() else ""
-            if actual_size != record["size"] or actual_digest != record["sha256"]:
-                return self._fail(transfer_id, record, transfer, "size or checksum mismatch")
-            destination = await self._finalise(record, root)
+            async with lock:
+                temp = Path(record["temp"])
+                root = self._receive_root()
+                self._assert_inside(temp, root)
+                actual_size = temp.stat().st_size if temp.exists() else 0
+                actual_digest = (await asyncio.to_thread(_sha256_file, temp)) if temp.exists() else ""
+                if actual_size != record["size"] or actual_digest != record["sha256"]:
+                    return self._fail(transfer_id, record, transfer, "size or checksum mismatch")
+                destination = await self._finalise(record, root)
         except ProtocolError:
             raise
         except OSError as exc:
@@ -397,6 +470,39 @@ class TransferService:
         self._release(transfer_id)
         self.emit("transfer.cancelled", transfer.public())
         return True
+
+    # ---------------------------------------------------------------- lifecycle
+    def startup_cleanup(self) -> int:
+        """Remove orphaned ``.part`` staging files after a daemon restart.
+
+        Resume is in-session only (see module docstring); nothing can resume across a restart,
+        so leftover staging files from a previous process are deleted. Returns how many were
+        removed. Call this once during daemon start, before any transfer can begin.
+        """
+        root = self._receive_root()
+        removed = 0
+        for path in root.iterdir():
+            if path.name.startswith(".") and path.name.endswith(".part"):
+                try:
+                    path.unlink()
+                    removed += 1
+                except OSError as exc:
+                    log.warning("could not remove orphaned staging file %s: %s", path, exc)
+        return removed
+
+    def shutdown(self) -> None:
+        """Tear down all transfer state deterministically on daemon shutdown."""
+        for record in list(self.incoming.values()):
+            Path(record["temp"]).unlink(missing_ok=True)
+        self.incoming.clear()
+        self._locks.clear()
+        self._reservations.clear()
+        self._declined.clear()
+        for transfer in self.transfers.values():
+            if transfer.state in ("pending", "active"):
+                transfer.state = "failed"
+                transfer.error = "daemon is shutting down"
+        self.transfers.clear()
 
 
 def _sha256_file(path: Path) -> str:

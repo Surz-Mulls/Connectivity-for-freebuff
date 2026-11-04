@@ -18,7 +18,7 @@ the repository root). The research pack that the prompt references is preserved 
 | Component | Path | Status |
 |---|---|---|
 | Daemon (protocol, pairing, clipboard, files, notifications, diagnostics, DeX supervision) | `daemon/` | implemented, 82 automated tests passing (protocol v2) |
-| Wire protocol specification v1 | `protocol/PROTOCOL.md` | normative |
+| Wire protocol specification v2 | `protocol/PROTOCOL.md` | normative |
 | Local IPC: Unix socket + loopback HTTP bridge, schema | `daemon/continuityd/ipc.py`, `docs/ipc-schema.md` | implemented + tested |
 | CLI (`continuityd`, `continuityctl`) | `daemon/continuityd/cli.py` | implemented |
 | Desktop UI (Qt 6 / QML) | `desktop/qml/` | QML sources; runtime not installed on the build host |
@@ -96,7 +96,7 @@ android/      Kotlin + Jetpack Compose client (+ generated Theme.kt)
 design/       canonical tokens (Catppuccin Mocha/Latte) + concept reference
 integrations/ Quickshell module, browser extension, Dolphin service menu
 scripts/      theme generation, environment/build helpers
-docs/         research provenance, feature matrix, test matrix, IPC schema, install guide
+docs/         research provenance, feature matrix, test matrix, CLI/IPC schema, install guide
 artifacts/    built APK, checksums, diagnostics reports, build logs
 ```
 

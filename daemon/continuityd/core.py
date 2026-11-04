@@ -69,6 +69,57 @@ class _suppress:
         return True
 
 
+# ---------------------------------------------------------------- reconnect policy values
+RECONNECT_BASE_DELAY = 1.0        # seconds; doubles each failed attempt
+RECONNECT_MAX_DELAY = 60.0        # bounded maximum backoff
+RECONNECT_MAX_ATTEMPTS = 10       # bounded series; after that the state is "offline"
+
+
+class ReconnectPolicy:
+    """Pure policy for bounded exponential backoff with jitter. Separated so it is unit-testable.
+
+    ``delay_for(attempt)`` is deterministic (tests) and ``jitter`` is applied by the caller;
+    ``reset()`` models a successful connection. States are exposed honestly so the snapshot can
+    report ``backoff`` / ``connecting`` / ``offline`` instead of pretending to be connected.
+    """
+
+    def __init__(self, base: float = RECONNECT_BASE_DELAY, max_delay: float = RECONNECT_MAX_DELAY,
+                 max_attempts: int = RECONNECT_MAX_ATTEMPTS):
+        self.base = base
+        self.max_delay = max_delay
+        self.max_attempts = max_attempts
+
+    def delay_for(self, attempt: int) -> float:
+        if attempt < 1:
+            raise ValueError("attempt starts at 1")
+        return min(self.base * (2 ** (attempt - 1)), self.max_delay)
+
+    def exhausted(self, attempt: int) -> bool:
+        return attempt >= self.max_attempts
+
+    def reset(self) -> None:
+        self.base = RECONNECT_BASE_DELAY
+
+
+@dataclass
+class ReconnectState:
+    fingerprint: str
+    name: str = ""
+    host: str = ""
+    port: int = 0
+    state: str = "idle"          # idle | backoff | connecting | offline
+    attempt: int = 0
+    last_error: str = ""
+    next_delay_s: float = 0.0
+    task: asyncio.Task | None = None
+
+    def public(self) -> dict:
+        return {"fingerprint": self.fingerprint, "name": self.name, "state": self.state,
+                "attempt": self.attempt, "last_error": self.last_error[:120],
+                "next_delay_s": round(self.next_delay_s, 2),
+                "target": {"host": self.host, "port": self.port} if self.host else None}
+
+
 @dataclass
 class Device:
     fingerprint: str
@@ -110,12 +161,18 @@ class DeviceManager:
         self.diagnostics = DiagnosticsRunner(settings=settings, identity=identity, manager=self)
         self.sessions: dict[str, Session] = {}
         self.devices: dict[str, Device] = {}
+        self.reconnects: dict[str, ReconnectState] = {}
+        self.reconnect_policy = ReconnectPolicy()
         self.server: asyncio.Server | None = None
         self.port = settings.port
         self.host = "0.0.0.0"
         self.started_at = time.time()
-        self._pairing_requests: dict[str, asyncio.Future] = {}
-        self._pending_transfers: dict[str, asyncio.Future] = {}
+        #: fingerprint -> (future, request payload); the payload is exposed in the snapshot so the
+        #: UI can show the SAS instead of a bare fingerprint
+        self._pairing_requests: dict[str, tuple[asyncio.Future, dict]] = {}
+        #: transfer_id -> (future, request payload); exposed as ``pending_transfers`` in the
+        #: snapshot so the desktop UI can render the approval prompt (§ pending-transfer UI)
+        self._pending_transfers: dict[str, tuple[asyncio.Future, dict]] = {}
         self.last_error = ""
         self.recent_failures: deque[dict] = deque(maxlen=20)
         self.metrics = {"connections_total": 0, "messages_in": 0, "messages_out": 0,
@@ -137,6 +194,19 @@ class DeviceManager:
         self.emit("daemon.started", {"port": self.port, "fingerprint": self.identity.fingerprint})
 
     async def stop(self) -> None:
+        for state in self.reconnects.values():
+            if state.task is not None and not state.task.done():
+                state.task.cancel()
+        self.reconnects.clear()
+        for future, _ in list(self._pairing_requests.values()):
+            if not future.done():
+                future.set_result(False)
+        self._pairing_requests.clear()
+        for future, _ in list(self._pending_transfers.values()):
+            if not future.done():
+                future.set_result(False)  # never auto-accept on shutdown
+        self._pending_transfers.clear()
+        self.transfers.shutdown()
         for session in list(self.sessions.values()):
             await session.close()
         self.sessions.clear()
@@ -228,6 +298,8 @@ class DeviceManager:
             raise SessionError(session.failure.code if session.failure else "internal",
                                session.failure.message if session.failure else "handshake failed")
         self._register(session, f"{host}:{port}", connected=session.trusted)
+        if session.trusted:
+            self._record_reconnect_target(session.peer.fingerprint, host, port)
         # keep the connection alive in the background
         asyncio.create_task(self._supervise(session, task))
         return {"fingerprint": session.peer.fingerprint, "trusted": session.trusted,
@@ -237,7 +309,77 @@ class DeviceManager:
         try:
             await task
         finally:
+            was_trusted = session.trusted
+            fingerprint = session.peer.fingerprint if session.peer else None
             self._unregister(session)
+            # A trusted connection that ended on its own must attempt to come back: automatic
+            # reconnect with bounded exponential backoff (§ reconnection). Revoked peers are
+            # never reconnected, and there is always a pinned-fingerprint requirement.
+            if was_trusted and fingerprint:
+                self.schedule_reconnect(fingerprint, "session closed")
+
+    # ---------------------------------------------------------------- reconnect
+    def _record_reconnect_target(self, fingerprint: str, host: str, port: int) -> None:
+        state = self.reconnects.get(fingerprint)
+        if state is None:
+            device = self.devices.get(fingerprint)
+            state = ReconnectState(fingerprint=fingerprint, name=device.name if device else "")
+            self.reconnects[fingerprint] = state
+        device = self.devices.get(fingerprint)
+        state.host, state.port = host, port
+        state.name = device.name if device else ""
+        state.state, state.attempt, state.last_error = "idle", 0, ""
+
+    def schedule_reconnect(self, fingerprint: str, reason: str) -> None:
+        """Start (or restart) the bounded reconnect loop for a peer we have a target address for.
+
+        Inbound-only sessions have no known address and are therefore NOT auto-reconnected; the
+        state honestly reports nothing instead of guessing a target.
+        """
+        state = self.reconnects.get(fingerprint)
+        if not state or not state.host:
+            return
+        if state.task is not None and not state.task.done():
+            return  # a loop is already running; do not stack reconnect attempts
+        state.attempt, state.state = 0, "backoff"
+        state.task = asyncio.create_task(self._reconnect_loop(state, reason))
+
+    async def _reconnect_loop(self, state: ReconnectState, reason: str) -> None:
+        try:
+            delay = self.reconnect_policy.delay_for(1)
+            while not self.reconnect_policy.exhausted(state.attempt):
+                state.last_error = reason
+                state.next_delay_s = delay
+                await asyncio.sleep(delay * (0.8 + 0.4 * (time.time() % 1)))
+                if not self.trust.is_trusted(state.fingerprint):
+                    # revoked (or un-paired) peers are never silently re-paired
+                    state.state, state.attempt = "offline", 0
+                    state.next_delay_s = 0.0
+                    return
+                state.attempt += 1
+                state.state = "connecting"
+                try:
+                    await self.connect(state.host, state.port,
+                                       expected_fingerprint=state.fingerprint)
+                    # connect() resets attempt/state on success; nothing more to do
+                    return
+                except (SessionError, ProtocolError, ConnectionError, OSError,
+                        asyncio.TimeoutError, TimeoutError) as exc:
+                    state.state, state.last_error = "backoff", f"{exc.__class__.__name__}: {exc}"[:120]
+                    delay = min(self.reconnect_policy.delay_for(state.attempt + 1),
+                                self.reconnect_policy.max_delay)
+            state.state, state.next_delay_s = "offline", 0.0
+            self.emit("reconnect.gave_up", {"fingerprint": state.fingerprint,
+                                            "attempts": state.attempt,
+                                            "last_error": state.last_error})
+        except asyncio.CancelledError:  # daemon stopped or peer revoked
+            state.state = "offline"
+            raise
+
+    def cancel_reconnect(self, fingerprint: str) -> None:
+        state = self.reconnects.pop(fingerprint, None)
+        if state and state.task is not None and not state.task.done():
+            state.task.cancel()
 
     # ---------------------------------------------------------------- approvals
     async def _approve_pairing(self, peer: Peer) -> bool:
@@ -250,7 +392,7 @@ class DeviceManager:
             "sas": peer.sas,
         }
         future: asyncio.Future = asyncio.get_running_loop().create_future()
-        self._pairing_requests[fingerprint] = future
+        self._pairing_requests[fingerprint] = (future, dict(request))
         self.emit("pairing.request", request)
         try:
             return bool(await asyncio.wait_for(future, 60))
@@ -261,7 +403,8 @@ class DeviceManager:
             self._pairing_requests.pop(fingerprint, None)
 
     def resolve_pairing(self, fingerprint: str, accept: bool) -> bool:
-        future = self._pairing_requests.get(fingerprint)
+        entry = self._pairing_requests.get(fingerprint)
+        future = entry[0] if isinstance(entry, tuple) else entry
         if not future or future.done():
             return False
         future.set_result(accept)
@@ -271,17 +414,18 @@ class DeviceManager:
         if self.settings.files_auto_accept:
             return True
         future: asyncio.Future = asyncio.get_running_loop().create_future()
-        self._pending_transfers[info["transfer_id"]] = future
+        self._pending_transfers[str(info["transfer_id"])] = (future, dict(info))
         self.emit("transfer.request", info)
         try:
             return bool(await asyncio.wait_for(future, 60))
         except (asyncio.TimeoutError, TimeoutError):
             return False
         finally:
-            self._pending_transfers.pop(info["transfer_id"], None)
+            self._pending_transfers.pop(str(info["transfer_id"]), None)
 
     def resolve_transfer(self, transfer_id: str, accept: bool) -> bool:
-        future = self._pending_transfers.get(transfer_id)
+        entry = self._pending_transfers.get(transfer_id)
+        future = entry[0] if isinstance(entry, tuple) else entry
         if not future or future.done():
             return False
         future.set_result(accept)
@@ -392,6 +536,7 @@ class DeviceManager:
 
     def revoke(self, fingerprint: str) -> dict:
         session = self.sessions.pop(fingerprint, None)
+        self.cancel_reconnect(fingerprint)   # a revoked peer is never auto-reconnected
         revoked = self.trust.revoke(fingerprint)
         device = self.devices.get(fingerprint)
         if device:
@@ -467,12 +612,30 @@ class DeviceManager:
             "devices": [d.public() for d in self.devices.values()],
             "trusted": [p.__dict__ for p in self.trust.active()],
             "transfers": [t.public() for t in self.transfers.transfers.values()],
+            # Pending approval offers live here (not in ``transfers``): the desktop UI polls the
+            # snapshot between events, so a request that arrives just before a subscribe must
+            # still be visible (§ desktop pending-transfer UI).
+            "pending_transfers": [
+                {"transfer_id": transfer_id,
+                 "id": transfer_id,
+                 "name": entry[1].get("name", ""),
+                 "size": entry[1].get("size", 0),
+                 "peer": entry[1].get("peer", ""),
+                 "peer_fingerprint": entry[1].get("peer_fingerprint", ""),
+                 "expires_in_s": 60}
+                for transfer_id, entry in list(self._pending_transfers.items())
+                if isinstance(entry, tuple) and not entry[0].done()
+            ],
+            "reconnects": [state.public() for state in self.reconnects.values()],
             "clipboard": dict(self.clipboard.status),
             "notifications": self.notifications.snapshot(),
             "dex": self.dex.status(),
             "metrics": dict(self.metrics),
             "pairing": {"pending": [
-                {"fingerprint": f, "sas": None} for f in self._pairing_requests
+                {"fingerprint": fingerprint,
+                 "sas": (entry[1].get("sas") if isinstance(entry, tuple) else None),
+                 "device": (entry[1].get("device", {}) if isinstance(entry, tuple) else {})}
+                for fingerprint, entry in self._pairing_requests.items()
             ]},
         }
 

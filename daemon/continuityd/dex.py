@@ -24,6 +24,10 @@ from typing import Callable
 from .config import Settings
 
 PACKAGE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$")
+#: adb -l serial formats that prove an actual TCP transport is connected (§ DeX truthfulness:
+#: "adb installed" is never evidence that wireless debugging works). IPv4 host:port only; the
+#: device must ALSO list with state == device.
+TCP_SERIAL_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}:\d{4,5}$")
 MODES = ("mirror", "virtual_display", "wireless")
 MAX_SESSION_SECONDS = 12 * 3600
 
@@ -72,6 +76,10 @@ class DexService:
         except (OSError, asyncio.TimeoutError) as exc:
             return 127, str(exc)
 
+    @staticmethod
+    def _authorized_devices(report: dict) -> list[dict]:
+        return [d for d in report["devices"] if d["state"] == "device"]
+
     async def probe(self) -> dict:
         report: dict = {
             "adb": {"path": self.adb, "available": bool(self.adb)},
@@ -109,9 +117,13 @@ class DexService:
                 report["scrcpy"]["supports_new_display"] |= "--new-display" in help_out
                 report["scrcpy"]["supports_flex_display"] = "--flex-display" in help_out
                 report["scrcpy"]["supports_start_app"] = "--start-app" in help_out
+                report["scrcpy"]["supports_audio"] = bool(
+                    "--audio" in help_out or "--audio-source" in help_out)
         else:
             report["notes"].append("scrcpy is not installed; no DeX or mirroring session is possible")
-        authorized = [d for d in report["devices"] if d["state"] == "device"]
+        authorized = self._authorized_devices(report)
+        wireless = [d for d in authorized
+                    if d["serial"] and TCP_SERIAL_RE.match(d["serial"])]
         report["capabilities"] = {
             "device_manager": bool(self.adb),
             "adb_authorized_device": bool(authorized),
@@ -120,11 +132,24 @@ class DexService:
             "independent_app_windows": bool(
                 report["scrcpy"]["supports_new_display"]
                 and report["scrcpy"]["supports_start_app"] and authorized),
-            "wireless_adb": bool(self.adb),
-            "audio_forwarding": bool(self.scrcpy),
-            "keyboard_mouse_injection": bool(self.scrcpy),
-            "native_dex_desktop_mode": False,  # Android 16 QPR3 feature; never assumed
+            # documented as available_but_unverified until an actual session runs on the target
+            "wireless_adb": bool(wireless),
+            "wireless_note": ("an adb TCP transport is currently connected" if wireless
+                              else "no connected adb TCP transport; wireless is not asserted"),
+            "audio_forwarding": bool(self.scrcpy and authorized
+                                     and report["scrcpy"].get("supports_audio", False)),
+            "keyboard_mouse_injection": bool(self.scrcpy and authorized),
+            # neither of the two below is ever assumed from a binary being installed:
+            "wireless_verified_by_session": False,
+            "native_dex_desktop_mode": False,  # HyperOS on the Mi 12 does not expose Samsung DeX
         }
+        if (self.scrcpy and self.adb
+                and not self.settings.adb_enabled):
+            report["notes"].append("DeX integration is disabled in settings; capabilities above "
+                                   "describe what the binaries support, not what is enabled")
+        report["notes"].append("keyboard/mouse injection on HyperOS may additionally require the "
+                               "firmware's 'USB debugging (Security settings)' option; verify on "
+                               "the device before enabling")
         report["enabled"] = self.settings.adb_enabled
         return report
 
@@ -136,8 +161,34 @@ class DexService:
         if not self.scrcpy or not self.adb:
             raise DexError("capability.denied", "scrcpy and adb are required for DeX sessions")
 
+    async def _resolve_serial(self, requested: str | None) -> str:
+        """Resolve the ADB serial to target. A session is never aimed at an ambiguous device."""
+        if not self.adb:
+            raise DexError("capability.denied", "adb is required to list devices")
+        code, out = await self._run([self.adb, "devices", "-l"])
+        if code != 0:
+            raise DexError("internal", "adb could not list devices")
+        authorized = []
+        for line in out.splitlines()[1:]:
+            parts = line.split()
+            if len(parts) >= 2 and parts[1] == "device":
+                authorized.append(parts[0])
+        if requested:
+            if requested not in authorized:
+                raise DexError("protocol.json",
+                               f"device {requested!r} is not connected and authorized")
+            return requested
+        if len(authorized) == 0:
+            raise DexError("capability.denied",
+                           "no authorized ADB device; unlock the phone and accept the prompt")
+        if len(authorized) > 1:
+            raise DexError("protocol.json",
+                           f"multiple authorized devices ({', '.join(authorized)}); "
+                           "pass an explicit serial")
+        return authorized[0]
+
     async def start(self, mode: str = "virtual_display", package: str | None = None,
-                    session_id: str | None = None) -> dict:
+                    serial: str | None = None, session_id: str | None = None) -> dict:
         self._require_enabled()
         if mode not in MODES:
             raise DexError("protocol.unsupported", f"unknown DeX mode {mode!r}")
@@ -146,10 +197,12 @@ class DexService:
         if self.session and self.session.state == "running":
             raise DexError("internal", "a DeX session is already running")
 
-        argv = [self.scrcpy, "--no-playback-control"]
+        serial = await self._resolve_serial(serial)
+        argv = [self.scrcpy, "-s", serial]
         if mode == "mirror":
-            argv = [self.scrcpy]
+            pass
         else:
+            argv.append("--no-playback-control")
             supports = (await self.probe())["scrcpy"]
             if not supports["supports_new_display"]:
                 raise DexError("capability.denied",
@@ -163,8 +216,13 @@ class DexService:
                                    "installed scrcpy cannot launch a specific app")
                 argv.append(f"--start-app={package}")
         if mode == "wireless":
-            # the caller must have paired/connected adb over TCP first; never enable it here
-            pass
+            # the caller must have paired/connected adb over TCP first; this daemon never enables
+            # wireless debugging or changes any device setting by itself
+            report = await self.probe()
+            if not report["capabilities"]["wireless_adb"]:
+                raise DexError("capability.denied",
+                               "no wireless (TCP) ADB transport is connected; connect it on the "
+                               "phone/laptop first, this daemon never enables wireless debugging")
 
         try:
             self.process = await asyncio.create_subprocess_exec(
@@ -176,8 +234,7 @@ class DexService:
             argv=argv, state="running", pid=self.process.pid)
         self.emit("dex.session", self.session.public())
         self._supervisor = asyncio.create_task(self._watch())
-        return {"ok": True, "session": self.session.public(),
-                "argv": argv[:1] + argv[1:]}  # argv is allowlisted and contains no user strings
+        return {"ok": True, "session": self.session.public(), "serial": serial}
 
     async def _watch(self) -> None:
         if not self.process or not self.session:

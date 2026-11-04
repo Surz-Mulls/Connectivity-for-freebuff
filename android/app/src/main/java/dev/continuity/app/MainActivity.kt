@@ -51,6 +51,17 @@ class MainActivity : ComponentActivity() {
     private var sharedUri: Uri? = null
     private var handoffUri: Uri? = null
 
+    override fun onResume() {
+        super.onResume()
+        // Measured foreground state for status reporting (§ batteryStatus reports what it measured).
+        AppState.activityVisible = true
+    }
+
+    override fun onPause() {
+        AppState.activityVisible = false
+        super.onPause()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         handleIntent(intent)

@@ -10,6 +10,10 @@ object AppState {
     val pairing = MutableStateFlow<JSONObject?>(null)
     val log = MutableStateFlow<List<String>>(emptyList())
 
+    /** Measured foreground state, set by [MainActivity]/onResume and onPause — never assumed. */
+    @Volatile
+    var activityVisible: Boolean = false
+
     fun note(message: String) {
         log.value = (log.value + message).takeLast(80)
     }

@@ -61,6 +61,7 @@ async def _daemon_main(settings: Settings, identity: Identity, trust: TrustStore
         "listening on 0.0.0.0:%s · fingerprint %s · ipc %s · http 127.0.0.1:%s",
         manager.port, identity.fingerprint, info["socket"], ipc.http_port)
     stop = asyncio.Event()
+    ipc.stop_event = stop
 
     def _request_stop() -> None:
         stop.set()
@@ -107,69 +108,88 @@ def _print(payload, as_json: bool = False) -> None:
     print(json.dumps(result, indent=2, default=str))
 
 
-def cmd_status(args) -> int:
-    _print(asyncio.run(_ipc_request({"cmd": "status"})), args.json)
+def _dispatch(command: dict, as_json: bool, timeout: float = 60.0) -> int:
+    """Run one IPC command and reflect its result in the process exit code.
+
+    Exit codes (documented in docs/cli-schema.md):
+      0 — the command succeeded (``ok: true``; ``--json`` prints the unwrapped result);
+      1 — the daemon answered a structured ``{ok: false}`` error (also for ``--json``, which then
+          prints the error envelope so scripts can read ``code``/``message``);
+      2 — no daemon / transport problem or a usage error (argparse-style) so shell pipelines and
+          the Dolphin/browser integrations never mistake a failed send for success.
+    """
+    try:
+        payload = asyncio.run(_ipc_request(command, timeout))
+    except SystemExit:
+        raise
+    except (OSError, json.JSONDecodeError) as exc:
+        if as_json:
+            print(json.dumps({"ok": False, "code": "internal", "message": str(exc)}))
+        else:
+            print(f"error: daemon request failed: {exc}", file=sys.stderr)
+        return 1
+    if isinstance(payload, dict) and payload.get("ok") is False:
+        if as_json:
+            print(json.dumps(payload, indent=2, default=str))
+        else:
+            print(f"error: {payload.get('code')}: {payload.get('message')}", file=sys.stderr)
+        return 1
+    body = payload.get("result") if isinstance(payload, dict) else payload
+    if as_json:
+        print(json.dumps(body, indent=2, default=str))
+    else:
+        # human output: the useful payload itself (the {ok,result} envelope stays inside IPC)
+        print(json.dumps(body, indent=2, default=str))
     return 0
+
+
+def cmd_status(args) -> int:
+    return _dispatch({"cmd": "status"}, args.json)
 
 
 def cmd_devices(args) -> int:
-    _print(asyncio.run(_ipc_request({"cmd": "devices"})), args.json)
-    return 0
+    return _dispatch({"cmd": "devices"}, args.json)
 
 
 def cmd_pair(args) -> int:
     if args.action == "begin":
-        _print(asyncio.run(_ipc_request({"cmd": "pair.begin"})), args.json)
-    elif args.action == "connect":
-        _print(asyncio.run(_ipc_request({"cmd": "pair.connect", "host": args.host,
-                                         "port": args.port,
-                                         "fingerprint": args.fingerprint})), args.json)
-    elif args.action == "discover":
-        _print(asyncio.run(_ipc_request({"cmd": "pair.discover",
-                                         "timeout": args.timeout})), args.json)
-    elif args.action in ("approve", "deny"):
-        _print(asyncio.run(_ipc_request({"cmd": "pair.approve", "fingerprint": args.fingerprint,
-                                         "accept": args.action == "approve"})), args.json)
-    return 0
+        return _dispatch({"cmd": "pair.begin"}, args.json)
+    if args.action == "connect":
+        return _dispatch({"cmd": "pair.connect", "host": args.host, "port": args.port,
+                          "fingerprint": args.fingerprint}, args.json)
+    if args.action == "discover":
+        return _dispatch({"cmd": "pair.discover", "timeout": args.timeout}, args.json)
+    return _dispatch({"cmd": "pair.approve", "fingerprint": args.fingerprint,
+                      "accept": args.action == "approve"}, args.json)
 
 
 def cmd_trust(args) -> int:
     if args.action == "revoke":
-        _print(asyncio.run(_ipc_request({"cmd": "trust.revoke",
-                                         "fingerprint": args.fingerprint})), args.json)
-    else:
-        _print(asyncio.run(_ipc_request({"cmd": "trust.list"})), args.json)
-    return 0
+        return _dispatch({"cmd": "trust.revoke", "fingerprint": args.fingerprint}, args.json)
+    return _dispatch({"cmd": "trust.list"}, args.json)
 
 
 def cmd_clipboard(args) -> int:
-    command = {"cmd": "clipboard.push", "fingerprint": args.fingerprint}
-    _print(asyncio.run(_ipc_request(command)), args.json)
-    return 0
+    return _dispatch({"cmd": "clipboard.push", "fingerprint": args.fingerprint}, args.json)
 
 
 def cmd_send(args) -> int:
-    _print(asyncio.run(_ipc_request({"cmd": "file.send", "fingerprint": args.fingerprint,
-                                     "path": str(Path(args.path).expanduser())})), args.json)
-    return 0
+    return _dispatch({"cmd": "file.send", "fingerprint": args.fingerprint,
+                      "path": str(Path(args.path).expanduser())}, args.json)
 
 
 def cmd_handoff(args) -> int:
-    _print(asyncio.run(_ipc_request({"cmd": "handoff.send", "fingerprint": args.fingerprint,
-                                     "url": args.url})), args.json)
-    return 0
+    return _dispatch({"cmd": "handoff.send", "fingerprint": args.fingerprint,
+                      "url": args.url}, args.json)
 
 
 def cmd_ring(args) -> int:
-    _print(asyncio.run(_ipc_request({"cmd": "find.ring", "fingerprint": args.fingerprint,
-                                     "duration_s": args.duration})), args.json)
-    return 0
+    return _dispatch({"cmd": "find.ring", "fingerprint": args.fingerprint,
+                      "duration_s": args.duration}, args.json)
 
 
 def cmd_ping(args) -> int:
-    _print(asyncio.run(_ipc_request({"cmd": "find.ping",
-                                     "fingerprint": args.fingerprint})), args.json)
-    return 0
+    return _dispatch({"cmd": "find.ping", "fingerprint": args.fingerprint}, args.json)
 
 
 def cmd_privacy(args) -> int:
@@ -178,28 +198,36 @@ def cmd_privacy(args) -> int:
         command["privacy_mode"] = bool(args.on)
     if args.clipboard:
         command["clipboard_direction"] = args.clipboard
-    _print(asyncio.run(_ipc_request(command)), args.json)
-    return 0
+    return _dispatch(command, args.json)
 
 
 def cmd_dex(args) -> int:
     if args.action == "probe":
         command = {"cmd": "dex.probe"}
     elif args.action == "start":
-        command = {"cmd": "dex.start", "mode": args.mode, "package": args.app}
+        command = {"cmd": "dex.start", "mode": args.mode, "package": args.app,
+                   "serial": args.serial}
     elif args.action == "status":
         command = {"cmd": "dex.status"}
     else:
         command = {"cmd": "dex.stop"}
-    _print(asyncio.run(_ipc_request(command)), args.json)
-    return 0
+    return _dispatch(command, args.json)
 
 
 def cmd_diagnostics(args) -> int:
     payload = asyncio.run(_ipc_request({"cmd": "diagnostics.run"}, timeout=120))
-    _print(payload, args.json)
-    if not args.json and isinstance(payload, dict) and payload.get("ok"):
-        paths = payload["result"].get("paths", {})
+    if isinstance(payload, dict) and payload.get("ok") is False:
+        if args.json:
+            print(json.dumps(payload, indent=2, default=str))
+        else:
+            print(f"error: {payload.get('code')}: {payload.get('message')}", file=sys.stderr)
+        return 1
+    result = payload.get("result") if isinstance(payload, dict) else payload
+    if args.json:
+        print(json.dumps(result, indent=2, default=str))
+    else:
+        print(json.dumps(result, indent=2, default=str))
+        paths = (result or {}).get("paths", {})
         print("\nreports:")
         for kind, path in paths.items():
             print(f"  {kind}: {path}")
@@ -228,14 +256,21 @@ def cmd_version(args) -> int:
 
 
 def cmd_paths(args) -> int:
-    """Authoritative local paths. Shell launchers must use these instead of guessing."""
+    """Authoritative local paths. Shell launchers must use these instead of guessing.
+
+    This is a separate documented schema (docs/cli-schema.md): top-level ``runtime_dir``/``ipc``/
+    ``api_config`` fields, NOT the ``{ok, result}`` envelope used by IPC-backed commands.
+    """
     payload = {
-        "ok": True,
         "runtime_dir": str(runtime_dir()),
         "ipc": str(ipc_socket_path()),
         "api_config": str(api_config_path()),
     }
-    _print(payload, args.json)
+    if args.json:
+        print(json.dumps(payload, indent=2))
+    else:
+        for key, value in payload.items():
+            print(f"{key}: {value}")
     return 0
 
 
@@ -306,6 +341,7 @@ def build_parser() -> argparse.ArgumentParser:
     dex.add_argument("--mode", default="virtual_display",
                      choices=["mirror", "virtual_display", "wireless"])
     dex.add_argument("--app")
+    dex.add_argument("--serial", help="ADB device serial; required when several are connected")
     dex.add_argument("--json", action="store_true")
     dex.set_defaults(func=cmd_dex)
 

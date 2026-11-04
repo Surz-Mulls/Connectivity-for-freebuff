@@ -5,6 +5,28 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-04 — continuation pass (v0.1.0-test.2 candidate, NOT published)
+
+- **Automatic reconnect implemented** (§A): desktop `DeviceManager` bounded-backoff loop with
+  jitter/reset/offline honesty + `ReconnectPolicy`/`ReconnectState` (tests in `test_reconnect.py`);
+  Android side `ReconnectPolicy.kt` + schedule/reset/cancel in `ContinuityService` (5 JVM tests).
+- Phase-0 §1 audit fixed: notification relay actually wired (`notify.action` reply/dismiss,
+  secret-visibility redaction, own-package skip), `staging.setReadable(false,false)` removed,
+  peer-validated-before-destructive finalisation, Android/Python pre-approval reservations, cap
+  incl. pending, required `file.done` digest, per-transfer lock around finalisation, staging
+  startup/shutdown cleanup, fail-closed `_same_uid`, constant-time token compare, real daemon
+  shutdown path, CLI exit codes + unwrapped `--json` schema (docs/cli-schema.md), DeX honest
+  capabilities + explicit serial choice, measured Android network/foreground/clipboard result,
+  single canonical AppImage pipeline (fatal on failure, clean-checkout venv, pinned tool,
+  measured-hash record), stale v1 labels fixed, fresh APK + 3 Linux assets rebuilt (see
+  docs/VALIDATION_REPORT_v0.1.0-test.2.md for sizes/SHAs).
+- **Distrobox/makepkg and device tests stay blocked** in this environment (no distrobox/podman,
+  docker socket root-only, no phone/compositor); exact user steps in STATUS.json `needs_user`.
+- Repeat test counts measured this pass: **Python 95 passed**, Android JVM tests ok (incl. new
+  reconnect tests), `assembleDebug` ok, AppImage in-image self-test ok, `sha256sum -c` ok.
+- CI not yet run; **nothing pushed, tagged or released** — awaiting approval for
+  `v0.1.0-test.2`.
+
 ## 2026-10-31 — published
 
 - Pre-release `v0.1.0-test.1` published at the tagged commit with APK, AppImage, Arch and

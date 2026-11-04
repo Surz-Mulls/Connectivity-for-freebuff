@@ -2,8 +2,10 @@
 """Minimal QML host for the Continuity desktop client.
 
 `pyside6-qml` is not shipped by every PySide6 build, so the AppImage and the portable archive use
-this launcher instead. Arguments are forwarded untouched: Main.qml reads ``--api-config=<path>``
-from ``Qt.application.arguments`` and never receives the bearer token itself.
+this launcher instead. One authoritative path-resolution strategy: if ``--api-config=<path>`` was
+not given, the launcher resolves the daemon's token-file path through
+``continuityd.config.api_config_path`` — the same source of truth the daemon writes — and supplies
+it (the PATH argument only ever contains the file path, never the bearer token).
 """
 
 from __future__ import annotations
@@ -17,6 +19,12 @@ from PySide6.QtQml import QQmlApplicationEngine
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
+    if not any(arg.startswith("--api-config=") or arg.startswith("--api-port=") for arg in argv[1:]):
+        try:
+            from continuityd.config import api_config_path
+            argv.append(f"--api-config={api_config_path()}")
+        except Exception as exc:  # noqa: BLE001 - the UI must show the error, not crash
+            print(f"cannot resolve the daemon API config path: {exc}", file=sys.stderr)
     here = Path(__file__).resolve().parent
     qml = here / "qml" / "Main.qml"
     if not qml.is_file():
