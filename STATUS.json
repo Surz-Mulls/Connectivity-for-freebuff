@@ -5,7 +5,7 @@
   "module": "v0.1.0-test.2 (proposed, not published)",
   "state": "waiting-user",
   "branch": "FreeBuff",
-  "validated_commit": "HEAD-TBD (this file was updated before the commit; see PROGRESS.md for the final SHA)",
+  "validated_commit": "dde059afc44c6a43f59a319756038a28b92ede04",
   "tag": "v0.1.0-test.2",
   "tag_published": false,
   "main_modified": false,
@@ -32,5 +32,6 @@
   ],
   "release_url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.1",
   "tag_target_commit": "8b1313371caa4b358dc63f34c85fc6cd7c1b1d3b",
-  "docs_head_note": "v0.1.0-test.1 stays untouched; the v0.1.0-test.2 candidate is a separate un-published tag proposal"
+  "docs_head_note": "v0.1.0-test.1 stays untouched; the v0.1.0-test.2 candidate is a separate un-published tag proposal",
+  "candidate_head_note": "STATUS.json records the head it was finalised against; a docs-only commit may follow it"
 }
