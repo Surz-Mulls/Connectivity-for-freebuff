@@ -110,3 +110,9 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 - Cross-checked the `main`-branch (v6 handoff) deliverables against the branch: baseline
   remote-input doc, batch-test matrix, docs/research + design tokens, diagnostics CLI + QML page,
   `paths`/`--json` schema — all present; no missed item.
+
+## Shipped — v0.1.0-test.2
+Published https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.2
+(prerelease, tag at `8db808a`). Assets uploaded: debug APK, AppImage, Arch `.tar.zst`, portable
+`.tar.zst`, `SHA256SUMS`, `BUILD-MANIFEST.json`, validation report. **Every asset was re-downloaded
+from the release URL and its SHA-256 was re-verified.** `main` and `v0.1.0-test.1` untouched.
