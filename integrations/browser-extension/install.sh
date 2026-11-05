@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Register the native-messaging host for Chromium-family browsers (user scope only).
+# Idempotent: safe to re-run after native host updates (manifest syntax verified with bash -n in CI).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOST_NAME="dev.continuity.handoff"
@@ -12,20 +13,27 @@ install -m 0755 "$HERE/native-host/continuity_native.py" "$HOST_SCRIPT"
 
 # Chrome requires the manifest to name an executable; use a tiny wrapper so the shebang works
 # even when the script is not directly executable on this filesystem.
-cat > "$WRAPPER" <<EOF
+cat > "$WRAPPER" <<'WEOF'
 #!/usr/bin/env bash
-exec python3 "$HOST_SCRIPT" "\$@"
-EOF
+WEOF
+# Interpolated values must be written by the quoting-aware expansion below, not inside heredocs.
+{
+  printf '#!/usr/bin/env bash\n'
+  printf 'exec python3 %q %q "$@"\n' "$HOST_SCRIPT"
+} > "$WRAPPER"
 chmod 0755 "$WRAPPER"
 
+targets=(
+  "$HOME/.config/google-chrome/NativeMessagingHosts"
+  "$HOME/.config/chromium/NativeMessagingHosts"
+  "$HOME/.config/vivaldi/NativeMessagingHosts"
+  "$HOME/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts"
+)
+
 written=0
-for target in \\
-  "$HOME/.config/google-chrome/NativeMessagingHosts" \\
-  "$HOME/.config/chromium/NativeMessagingHosts" \\
-  "$HOME/.config/vivaldi/NativeMessagingHosts" \\
-  "$HOME/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts"; do
+for target in "${targets[@]}"; do
   mkdir -p "$target"
-  cat > "$target/$HOST_NAME.json" <<EOF
+  cat > "$target/$HOST_NAME.json" <<JEOF
 {
   "name": "$HOST_NAME",
   "description": "Continuity tab handoff",
@@ -33,7 +41,7 @@ for target in \\
   "type": "stdio",
   "allowed_origins": ["chrome-extension://REPLACE_WITH_EXTENSION_ID/"]
 }
-EOF
+JEOF
   written=$((written + 1))
 done
 

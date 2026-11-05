@@ -97,3 +97,16 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
   build was possible.
 - Baseline KDE Connect remote-input reproduction is **blocked** (needs the laptop + phone); a
   procedure and evidence template live in `docs/baseline-remote-input.md`.
+
+### Recheck pass (same day, before shipping)
+- Re-ran: Python suite (**95 passed**), Android JVM tests (exit 0), `compileall` clean; scripts
+  syntax-checked (`bash -n`).
+- Found + fixed a real pre-existing bug: `integrations/browser-extension/install.sh` had doubled
+  line-continuation backslashes, so the registration script never parsed at all; rewritten with an
+  array loop and `bash -n` green.
+- Broadened v7.1 audit source re-reads (transfers/integration/refactor layers), added
+  `scripts/build-arch-distrobox.sh` (the reproducible user-side distrobox build path; impossible in
+  this VM: no distrobox/podman, root-only docker socket, sudo prohibited by the sandbox).
+- Cross-checked the `main`-branch (v6 handoff) deliverables against the branch: baseline
+  remote-input doc, batch-test matrix, docs/research + design tokens, diagnostics CLI + QML page,
+  `paths`/`--json` schema — all present; no missed item.
