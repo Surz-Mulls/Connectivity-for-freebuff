@@ -13,7 +13,33 @@ from continuityd.protocol import ProtocolError
 from continuityd.session import SessionError
 from continuityd.transfers import MAX_GLOBAL, MAX_PER_PEER, TransferService
 
-from tests.test_transfer_policy import _Session, _offer, _service
+
+def _load_transfer_helpers():
+    """Load sibling helpers without requiring ``tests`` to be an importable package.
+
+    ``python -m pytest daemon/tests`` from the repository root (the CI command, on
+    pytest's importlib mode) does not put ``daemon/`` on ``sys.path``, so
+    ``from tests.test_transfer_policy import ...`` raises ModuleNotFoundError.
+    Loading the sibling file by path keeps the helpers shared either way the
+    suite is launched, including ``cd daemon && python -m pytest``.
+    """
+    import importlib.util
+
+    path = Path(__file__).resolve().with_name("test_transfer_policy.py")
+    spec = importlib.util.spec_from_file_location(
+        "_continuity_transfer_policy_helpers", path
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load transfer helpers from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_helpers = _load_transfer_helpers()
+_Session = _helpers._Session
+_offer = _helpers._offer
+_service = _helpers._service
 
 
 @pytest.mark.asyncio
