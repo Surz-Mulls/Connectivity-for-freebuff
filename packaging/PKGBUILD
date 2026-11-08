@@ -1,8 +1,16 @@
-# Maintainer-facing Arch package definition. Build with `makepkg -si` on Arch/base-devel.
-# The release tarball is the GitHub tag archive; both SHA-256 values live in the release SHA256SUMS
-# once the pre-release is published, so replace the placeholder before a real `makepkg` run.
+# Maintainer-facing Arch package definition.
+#
+# This is the only definition that produces a real pacman package. Build it with
+# `makepkg -sfC` (or scripts/build-arch-distrobox.sh). The file
+# dist/continuity-linux-x86_64.pkg.tar.zst written by scripts/package-linux.sh is a
+# manually assembled layout archive: it has no .BUILDINFO/.MTREE and must not be
+# described as a makepkg package.
+#
+# Source is the immutable v0.1.0-test.2 tag archive (tag target 8db808a7). The
+# checksum below was measured twice from that URL on 2026-11-08 and both downloads
+# matched. Do not use SKIP.
 pkgname=continuity
-pkgver=0.1.0
+pkgver=0.1.0.test2
 pkgrel=1
 pkgdesc="Local-first Android/Linux continuity: pinned pairing, clipboard, files, notifications"
 arch=('x86_64')
@@ -11,11 +19,11 @@ license=('GPL-3.0-only')
 depends=('python' 'python-cryptography' 'python-zeroconf' 'python-qrcode' 'python-dbus-next'
          'qt6-declarative')
 optdepends=('python-pyside6: alternative QML runtime instead of qt6-declarative')
-source=("$pkgname-$pkgver.tar.gz::https://github.com/Surz-Mulls/Connectivity-for-freebuff/archive/refs/tags/v0.1.0-test.1.tar.gz")
-sha256sums=('SKIP')
+source=("v0.1.0-test.2.tar.gz::https://github.com/Surz-Mulls/Connectivity-for-freebuff/archive/refs/tags/v0.1.0-test.2.tar.gz")
+sha256sums=('aa817ab138cca16efecb15f59def0cfe59845fad852c0e989b015f69ed1e3698')
 
 package() {
-  local src="$srcdir/Connectivity-for-freebuff-0.1.0-test.1"
+  local src="$srcdir/Connectivity-for-freebuff-0.1.0-test.2"
   install -dm0755 "$pkgdir/usr/lib/continuity" "$pkgdir/usr/bin" \
                    "$pkgdir/usr/share/applications" "$pkgdir/usr/share/licenses/continuity" \
                    "$pkgdir/usr/share/icons/hicolor/scalable/apps"

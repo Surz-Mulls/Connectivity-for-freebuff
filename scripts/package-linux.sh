@@ -175,7 +175,7 @@ PKGINFO
 pkg_out="$DIST/continuity-linux-$ARCH.pkg.tar.zst"
 rm -f "$pkg_out"
 zstd_tar "$PKG" "$pkg_out"
-echo "arch:     $pkg_out ($(stat -c%s "$pkg_out") bytes)"
+echo "arch:     $pkg_out ($(stat -c%s "$pkg_out") bytes) — MANUAL layout archive, not a makepkg package"
 
 # ------------------------------------------------------------------ AppImage: one canonical builder
 appimage_out="$DIST/continuity-linux-$ARCH.AppImage"
@@ -208,11 +208,11 @@ cat > BUILD-MANIFEST.json <<JSON
   "assets": [
     {"name": "continuity-android-debug.apk", "type": "apk", "signing": "debug"},
     {"name": "continuity-linux-x86_64-portable.tar.zst", "type": "portable", "bundles_qt": false},
-    {"name": "continuity-linux-x86_64.pkg.tar.zst", "type": "arch-package", "bundles_qt": false, "built_by_makepkg": false},
+    {"name": "continuity-linux-x86_64.pkg.tar.zst", "type": "manual-arch-layout", "bundles_qt": false, "built_by_makepkg": false, "note": "Assembled by scripts/package-linux.sh. Not a makepkg product: no .BUILDINFO or .MTREE. A real package is packaging/PKGBUILD via makepkg and lands in dist/makepkg/."},
     $appimage_statements
   ],
   "host_dependencies": ["python>=3.11", "python-cryptography", "python-zeroconf", "python-qrcode", "qt6-declarative or PySide6-Essentials"],
-  "notes": "Portable and Arch declare Qt/Python as host dependencies. The AppImage bundles CPython and PySide6 (build-appimage.sh). The Arch package is assembled from the PKGBUILD layout by this script and has NOT been produced or install-tested by makepkg user - environment restriction; see docs/VALIDATION_REPORT.md."
+  "notes": "Portable and the manual Arch layout archive declare Qt/Python as host dependencies. The AppImage bundles CPython and PySide6 (build-appimage.sh). continuity-linux-x86_64.pkg.tar.zst is NOT produced by makepkg; do not install it as if it were. The makepkg package is a separate artifact (packaging/PKGBUILD, dist/makepkg/)."
 }
 JSON
 cat SHA256SUMS

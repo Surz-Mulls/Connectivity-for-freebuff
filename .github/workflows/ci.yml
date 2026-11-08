@@ -2,9 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [FreeBuff]
+    branches: [FreeBuff, Grok]
   pull_request:
-    branches: [FreeBuff]
+    branches: [FreeBuff, Grok]
   workflow_dispatch:
 
 permissions:
@@ -63,7 +63,7 @@ jobs:
       - name: Install packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends zstd
+          sudo apt-get install -y --no-install-recommends zstd desktop-file-utils
       - name: Build Linux deliverables (canonical pipeline; AppImage failure is fatal)
         run: bash scripts/package-linux.sh
       - name: Verify artifacts
@@ -79,6 +79,12 @@ jobs:
           QT_QPA_PLATFORM=offscreen dist/continuity-linux-x86_64.AppImage --self-test
           # FUSE-free invocation must also work
           QT_QPA_PLATFORM=offscreen dist/continuity-linux-x86_64.AppImage --appimage-extract-and-run --self-test
+          # A path containing spaces must still launch the same entry point.
+          # This is Ubuntu CI, not an Arch session — see the hardware ledger.
+          mkdir -p "/tmp/Continuity Path"
+          cp dist/continuity-linux-x86_64.AppImage "/tmp/Continuity Path/Continuity.AppImage"
+          chmod +x "/tmp/Continuity Path/Continuity.AppImage"
+          QT_QPA_PLATFORM=offscreen "/tmp/Continuity Path/Continuity.AppImage" --appimage-extract-and-run --self-test
       - uses: actions/upload-artifact@v4
         with:
           name: linux-deliverables
@@ -88,3 +94,39 @@ jobs:
             dist/continuity-linux-x86_64-portable.tar.zst
             dist/SHA256SUMS
             dist/BUILD-MANIFEST.json
+
+  arch-makepkg:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: makepkg, install and verify in a clean Arch container
+        run: |
+          mkdir -p dist/makepkg
+          docker run --rm -v "$PWD:/src" archlinux:latest bash -s <<'EOS'
+          set -euo pipefail
+          pacman -Syu --noconfirm --needed \
+            base-devel git sudo python python-cryptography python-zeroconf \
+            python-qrcode python-dbus-next qt6-declarative
+          useradd -m builder
+          rm -rf /tmp/pkg
+          mkdir -p /tmp/pkg /src/dist/makepkg
+          cp /src/packaging/PKGBUILD /tmp/pkg/PKGBUILD
+          chown -R builder:builder /tmp/pkg
+          runuser -u builder -- bash -lc 'cd /tmp/pkg && makepkg -sfC --noconfirm --nocheck'
+          mapfile -t built < <(find /tmp/pkg -maxdepth 1 -type f -name 'continuity-*.pkg.tar.zst' ! -name '*-debug-*' | sort)
+          test "${#built[@]}" -eq 1
+          case "${built[0]}" in
+            *continuity-linux-x86_64.pkg.tar.zst)
+              echo "refusing the manually assembled archive name" >&2
+              exit 1
+              ;;
+          esac
+          pacman -U --noconfirm "${built[0]}"
+          bash /src/scripts/verify-arch-install.sh
+          cp -v "${built[0]}" /src/dist/makepkg/
+          EOS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-makepkg-package
+          path: dist/makepkg/*.pkg.tar.zst
+
