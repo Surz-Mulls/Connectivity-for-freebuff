@@ -1,0 +1,78 @@
+{
+  "schema": "continuity.published-asset-ledger/1",
+  "release": "v0.1.0-test.2",
+  "release_url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.2",
+  "published_at": "2026-11-05T06:20:42Z",
+  "tag": "v0.1.0-test.2",
+  "tag_target_commit": "8db808a7c70513f545f1eb8656579911ce4c59b1",
+  "prerelease": true,
+  "draft": false,
+  "main_modified": false,
+  "previous_tag_untouched": {
+    "tag": "v0.1.0-test.1",
+    "commit": "8b1313371caa4b358dc63f34c85fc6cd7c1b1d3b"
+  },
+  "verified_at": "2026-11-08T06:50:00Z",
+  "verification": "Downloaded from the GitHub release and hashed with sha256sum. Each digest matches the GitHub API asset digest. The four binaries match the release SHA256SUMS asset. They do not all match the pre-upload measurements in docs/VALIDATION_REPORT_v0.1.0-test.2.md section 3.",
+  "linux_hash_mismatch_cause": "The APK is the pre-upload file. The AppImage, manual Arch layout archive and portable archive were rebuilt at 2026-11-05T06:19:30Z (PKGINFO builddate 1793859570) during release assembly. package-linux.sh embeds that timestamp and appimagetool is not reproducible, so the Linux SHA-256 values changed. SHA256SUMS was regenerated; the validation report asset was not. The Arch asset has no .BUILDINFO or .MTREE and is not a makepkg package.",
+  "assets": [
+    {
+      "name": "continuity-android-debug.apk",
+      "size": 29304123,
+      "sha256": "3c4f37cf0f2f71f535cf832237f519ddd547b325c161a61f63f539528ad48406",
+      "matches_preupload_report": true,
+      "kind": "android-debug-apk"
+    },
+    {
+      "name": "continuity-linux-x86_64.AppImage",
+      "size": 98195960,
+      "sha256": "91de5e553cceeab78091ac4235e3ea06bf589bc2ef121e60f69ff9a39f8775f4",
+      "matches_preupload_report": false,
+      "kind": "appimage"
+    },
+    {
+      "name": "continuity-linux-x86_64.pkg.tar.zst",
+      "size": 160021,
+      "sha256": "8b4248b2e4db42a3c30167a1daeabc3f21d8af914b43f673ed85594b29dc24cd",
+      "matches_preupload_report": false,
+      "kind": "manual-arch-layout",
+      "built_by_makepkg": false
+    },
+    {
+      "name": "continuity-linux-x86_64-portable.tar.zst",
+      "size": 161033,
+      "sha256": "57a89e3eb1579c40c61a907685bc84e89b677aa319a1fd34e0d2ba841845269c",
+      "matches_preupload_report": false,
+      "kind": "portable"
+    },
+    {
+      "name": "SHA256SUMS",
+      "size": 403,
+      "sha256": "f992c56dc34d970d372c79be4d2923332bd54ffe85a71e0328126ea63e30a1e6",
+      "kind": "checksums",
+      "covers_binaries": true
+    },
+    {
+      "name": "BUILD-MANIFEST.json",
+      "size": 763,
+      "sha256": "20b1bed0c9ee5267fdf96f1343728a7097b4ac6a832f5840683b8974a2144d12",
+      "kind": "release-manifest",
+      "commit_recorded": "8db808a7c70513f545f1eb8656579911ce4c59b1",
+      "built_utc": "2026-11-05T06:20:09Z",
+      "note": "Hand-written at upload. It is not the JSON emitted by scripts/package-linux.sh and it does not list hashes."
+    },
+    {
+      "name": "VALIDATION_REPORT_v0.1.0-test.2.md",
+      "size": 9228,
+      "sha256": "1c14588c39b84e2ef54de1d7b782612fcc4887164105121c06c734693eca74fa",
+      "kind": "report-asset",
+      "note": "Byte-identical to the pre-upload report. Its Linux hashes are the section 3 local build, not these assets."
+    }
+  ],
+  "tag_archive": {
+    "url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/archive/refs/tags/v0.1.0-test.2.tar.gz",
+    "sha256": "aa817ab138cca16efecb15f59def0cfe59845fad852c0e989b015f69ed1e3698",
+    "root": "Connectivity-for-freebuff-0.1.0-test.2/",
+    "downloads_compared": 2
+  }
+}

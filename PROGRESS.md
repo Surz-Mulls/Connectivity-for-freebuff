@@ -5,6 +5,35 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-08 — post-release repair (branch `Grok`, release not mutated)
+
+v0.1.0-test.2 **is published** (2026-11-05T06:20:42Z, tag `8db808a7c70513f545f1eb8656579911ce4c59b1`).
+The previous `STATUS.json` still said it was unpublished; that file was wrong, not the release.
+
+- CI on the tag was red: `python -m pytest daemon/tests` could not import `tests.test_transfer_policy`
+  (pytest importlib mode from the repo root), and the linux job died because `desktop-file-validate`
+  was not installed. Both are fixed on `Grok`. Tests were not deleted or weakened.
+- Published asset ledger (re-downloaded, `sha256sum`, matches GitHub digests and `SHA256SUMS`):
+  APK `3c4f37cf…8406` (same as the old report), AppImage `91de5e55…75f4`, manual Arch archive
+  `8b4248b2…24cd`, portable `57a89e3e…269c`. The Linux mismatch is a publish-time rebuild
+  (`builddate` 2026-11-05T06:19:30Z), not a corrupt APK. The published `.pkg.tar.zst` is **not**
+  makepkg output (no `.BUILDINFO` / `.MTREE`).
+- `packaging/PKGBUILD` now sources the v0.1.0-test.2 tag archive with sha256
+  `aa817ab138cca16efecb15f59def0cfe59845fad852c0e989b015f69ed1e3698`.
+  `scripts/build-arch-distrobox.sh` bind-mounts the repo at `/mnt/continuity-src`, always installs
+  the build packages, and treats verify failures as fatal. CI job `arch-makepkg` runs `makepkg`
+  in a clean `archlinux` container. The manual archive from `scripts/package-linux.sh` stays a
+  separate artifact.
+- Hardware, recorded only at the level of evidence:
+  - B01–B07: **implemented-unverified**, device runs **blocked** (no Mi 12 / HyperOS here).
+  - Wi-Fi reconnect and sleep/wake: **implemented-unverified** (policy unit tests only).
+  - Notification reply and dismissal: **implemented-unverified**.
+  - Quickshell and Dolphin on Hyprland: **implemented-unverified**, live session **blocked**.
+  - AppImage on Arch from a path with spaces: **not run on Arch**.
+  - KDE Connect remote-input baseline: **blocked**.
+  - DeX journeys: **implemented-unverified**; native desktop mode on Android 15: **not-implemented**.
+- No tag, no release asset, and no edit to `main` or the existing release.
+
 ## 2026-11-04 — continuation pass (v0.1.0-test.2 candidate, NOT published)
 
 - **Automatic reconnect implemented** (§A): desktop `DeviceManager` bounded-backoff loop with

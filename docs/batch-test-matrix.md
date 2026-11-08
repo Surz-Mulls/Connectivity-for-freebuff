@@ -79,3 +79,24 @@ Hyprland, no Qt). Hardware rows are marked blocked/not verified, never pass.
 | D03 | Dolphin menu | install service menu, right-click file | sends to phone | blocked — no Dolphin session |
 | D04 | KDE Connect remote input baseline | prompt §0.4 procedure | evidence table filled | blocked — see `baseline-remote-input.md` |
 | D05 | Universal Control | portal InputCapture test | input crosses displays | blocked — depends on D04 evidence |
+
+## E. Repair-pass ledger (2026-11-08) — not a claim that hardware passed
+
+| Item | Classification |
+|---|---|
+| B01 pair on Mi 12 / HyperOS | implemented-unverified; device run blocked |
+| B02 reconnect after Wi-Fi toggle | implemented-unverified; device run blocked |
+| B03 file to phone | implemented-unverified; device run blocked |
+| B04 file from phone | implemented-unverified; device run blocked |
+| B05 clipboard to phone | implemented-unverified; device run blocked |
+| B06 clipboard from phone | implemented-unverified; device run blocked |
+| B07 notification mirror + reply | implemented-unverified; device run blocked |
+| Wi-Fi reconnect and sleep/wake recovery | implemented-unverified; no sleep cycle was run |
+| Notification reply and dismissal | implemented-unverified |
+| Quickshell on Hyprland | implemented-unverified; live shell blocked |
+| Dolphin on Hyprland | implemented-unverified; live Dolphin blocked |
+| AppImage launch on Arch, path containing spaces | not run on Arch |
+| KDE Connect remote-input baseline | blocked (procedure only) |
+| DeX C01–C04 | implemented-unverified; no adb/scrcpy/phone |
+| DeX C05 native desktop mode | not-implemented for this Android 15 target |
+

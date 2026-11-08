@@ -1,23 +1,29 @@
-# Validation report — v0.1.0-test.2 candidate (continuation pass, MASTER_AGENT_PROMPT_v7.1)
+# Validation report — v0.1.0-test.2
 
-Repo `Surz-Mulls/Connectivity-for-freebuff`, branch **`FreeBuff`** only; `main` untouched. The
-published `v0.1.0-test.1` release and its tag `8b13133…` are unchanged; nothing in this pass was
-pushed, tagged or published — the candidate awaits explicit user approval (§ 7.15).
+Repo `Surz-Mulls/Connectivity-for-freebuff`. The published pre-release is
+[v0.1.0-test.2](https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.2)
+(`prerelease=true`, `draft=false`, published `2026-11-05T06:20:42Z`). The tag
+`v0.1.0-test.2` points at `8db808a7c70513f545f1eb8656579911ce4c59b1`. `main` and
+`v0.1.0-test.1` (`8b1313371caa4b358dc63f34c85fc6cd7c1b1d3b`) were not moved.
 
-## 1. Measured results
+This file used to say the candidate was unpublished. That was stale. The release
+exists. Section 3 is the earlier local build. Section 5 is the independently
+verified ledger of the bytes GitHub is actually serving. They are not the same
+Linux artifacts.
+
+## 1. Measured results (local, before the release was assembled)
 
 | Area | Result | Evidence |
 |---|---|---|
-| Python daemon suite | **95 passed** | `cd daemon && ../.venv/bin/python -m pytest -q` (82 previous + 7 reconnect + 7 new policy tests) |
-| Kotlin/JVM unit tests | **ok (exit 0, quiet)** incl. 5 new `ReconnectPolicyTest` tests | `./gradlew :app:testDebugUnitTest` |
-| Android debug build | **passed** | `./gradlew :app:assembleDebug` (exit 0) |
-| AppImage in-image self-test | **passed** | `QT_QPA_PLATFORM=offscreen dist/… .AppImage --appimage-extract-and-run --self-test` |
-| Internal checksum check | **passed** | `sha256sum -c SHA256SUMS` in `dist/` |
-| CI workflow | **not run** | updated to single canonical pipeline; first run must happen on GitHub |
-| Android instrumentation / device journeys B01–B07 | **blocked** | no phone, no emulator in this environment |
-| QML/Quickshell/Dolphin on live desktop | **blocked** | no Hyprland/Qt display session |
-| Arch makepkg build + install test | **blocked** | no distrobox/podman, docker socket is `root:docker 660`, sudo exists but is prohibited here |
-| KDE Connect remote-input baseline (§0.4) | **blocked** | no compositor/user session; required evidence cannot be produced in this VM |
+| Python daemon suite | **95 passed** | `cd daemon && python -m pytest -q` on that pass (82 previous + 7 reconnect + 7 new policy tests). Re-measure on the repair commit separately; do not treat 95 as a CI result. |
+| Kotlin/JVM unit tests | **ok** incl. 5 `ReconnectPolicyTest` tests | `./gradlew :app:testDebugUnitTest` |
+| Android debug build | **passed** | `./gradlew :app:assembleDebug` |
+| AppImage in-image self-test | **passed** for the local AppImage in section 3 | not a statement about the published bytes |
+| Internal checksum check | **passed for that local `dist/`** | `sha256sum -c SHA256SUMS` |
+| CI on the tag | **failed** | run [41979767326](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/41979767326): `android` success, `python` collection error in `test_policy_round2.py`, `linux` missing `desktop-file-validate` |
+| Android instrumentation / device journeys B01–B07 | **blocked** | no phone |
+| QML/Quickshell/Dolphin on live Hyprland | **blocked** | no compositor session |
+| KDE Connect remote-input baseline (§0.4) | **blocked** | procedure only; see `docs/baseline-remote-input.md` |
 
 ## 2. Phase-0 audit ledger (findings → fix → test)
 
@@ -67,7 +73,10 @@ Inbound-only peers with no address are honestly not auto-reconnected. Tests: `te
   the unwrapped snapshot; exit codes make failures visible.
 * Quickshell panel: same underlying fix (documented in its header note).
 
-## 3. Artifacts (this pass, local only — NOT published)
+## 3. Pre-upload local artifacts (NOT the published files)
+
+Measured on the continuation pass, before the 2026-11-05 release assembly. Do not
+use these digests to verify a download of the GitHub release.
 
 | Asset | Size (B) | SHA-256 |
 |---|---|---|
@@ -76,12 +85,102 @@ Inbound-only peers with no address are honestly not auto-reconnected. Tests: `te
 | `continuity-linux-x86_64.pkg.tar.zst` | 159,978 | `03b79cdc60eb8ce1fa67031222a3cba6825df12d0d8e228bf9935342bd4c1701` |
 | `continuity-linux-x86_64-portable.tar.zst` | 161,044 | `7cd3e845ef2363becaa933a1516b2c545d72b5206e8ef7a2cac850c404ae6e41` |
 
-## 4. Known remaining gaps (honest)
+The APK row matches the published APK. The three Linux rows do not.
 
-* Android instrumentation/device journeys, DeX sessions, notification RemoteInput end-to-end:
-  device required.
-* Desktop GUI/QML/panel/Dolphin/browser on a real compositor: user session required.
-* Arch package is PKGBUILD-layout-assembled only; real `makepkg` (distrobox) still needed.
-* CI has not executed the updated pipeline yet.
-* §0.4 KDE Connect baseline: cannot be reproduced without the user's laptop session; the input
-  mechanism choice therefore remains blocked, not decided.
+## 4. Why the Linux hashes diverged (investigation)
+
+On 2026-11-08 the four release binaries, `SHA256SUMS`, `BUILD-MANIFEST.json` and
+the attached validation report were downloaded again and hashed with `sha256sum`.
+Those hashes match the GitHub API `digest` field for every asset. `SHA256SUMS`
+matches the four binaries. The attached validation report is byte-identical to
+the copy that was in git at `36c46a3` and still lists the section 3 digests.
+
+| Asset | Size published vs section 3 | SHA-256 vs section 3 |
+|---|---|---|
+| APK | 29,304,123 = 29,304,123 | match |
+| AppImage | 98,195,960 = 98,195,960 | differ |
+| manual Arch archive | 160,021 ≠ 159,978 | differ |
+| portable archive | 161,033 ≠ 161,044 | differ |
+
+The published Arch archive is the manual layout from `scripts/package-linux.sh`,
+not a makepkg package. Its `.PKGINFO` has `packager = FreeBuff <noreply@codebuff.com>`
+and `builddate = 1793859570` (`2026-11-05T06:19:30Z`, six seconds after the tag
+commit). It has no `.BUILDINFO` and no `.MTREE`, which makepkg always writes.
+The portable archive's tar members share that same mtime. The release
+`BUILD-MANIFEST.json` is a separate hand-written document (`built_utc`
+`2026-11-05T06:20:09Z`, commit `8db808a7…`) and does not carry per-file hashes.
+The release was published at `2026-11-05T06:20:42Z`.
+
+So the APK uploaded is the file section 3 measured. The Linux deliverables were
+rebuilt during release assembly. `package-linux.sh` embeds `builddate=$(date +%s)`
+and the tar mtimes, and `appimagetool` does not produce a reproducible AppImage,
+so a rebuild cannot keep the earlier SHA-256. `SHA256SUMS` was regenerated for
+the uploaded files. The validation report was not. Nothing in the existing
+release was replaced while recording this.
+
+## 5. Independently verified published asset ledger
+
+Verified `2026-11-08` by downloading each asset from the release and running
+`sha256sum`. Machine-readable copy: `docs/published-build-manifest-v0.1.0-test.2.json`.
+
+| Asset | Size (B) | SHA-256 |
+|---|---|---|
+| `continuity-android-debug.apk` | 29304123 | `3c4f37cf0f2f71f535cf832237f519ddd547b325c161a61f63f539528ad48406` |
+| `continuity-linux-x86_64.AppImage` | 98195960 | `91de5e553cceeab78091ac4235e3ea06bf589bc2ef121e60f69ff9a39f8775f4` |
+| `continuity-linux-x86_64.pkg.tar.zst` | 160021 | `8b4248b2e4db42a3c30167a1daeabc3f21d8af914b43f673ed85594b29dc24cd` |
+| `continuity-linux-x86_64-portable.tar.zst` | 161033 | `57a89e3eb1579c40c61a907685bc84e89b677aa319a1fd34e0d2ba841845269c` |
+| `SHA256SUMS` | 403 | `f992c56dc34d970d372c79be4d2923332bd54ffe85a71e0328126ea63e30a1e6` |
+| `BUILD-MANIFEST.json` | 763 | `20b1bed0c9ee5267fdf96f1343728a7097b4ac6a832f5840683b8974a2144d12` |
+| `VALIDATION_REPORT_v0.1.0-test.2.md` (the asset, not this updated file) | 9228 | `1c14588c39b84e2ef54de1d7b782612fcc4887164105121c06c734693eca74fa` |
+
+`SHA256SUMS` body:
+
+```
+3c4f37cf0f2f71f535cf832237f519ddd547b325c161a61f63f539528ad48406  continuity-android-debug.apk
+91de5e553cceeab78091ac4235e3ea06bf589bc2ef121e60f69ff9a39f8775f4  continuity-linux-x86_64.AppImage
+8b4248b2e4db42a3c30167a1daeabc3f21d8af914b43f673ed85594b29dc24cd  continuity-linux-x86_64.pkg.tar.zst
+57a89e3eb1579c40c61a907685bc84e89b677aa319a1fd34e0d2ba841845269c  continuity-linux-x86_64-portable.tar.zst
+```
+
+The published Arch asset remains a manual layout archive. A makepkg-built
+package is a different file (`packaging/PKGBUILD`, output under `dist/makepkg/`)
+and is not part of this release.
+
+Tag-archive checksum used by the PKGBUILD (downloaded twice, both matched):
+
+`aa817ab138cca16efecb15f59def0cfe59845fad852c0e989b015f69ed1e3698`  
+`https://github.com/Surz-Mulls/Connectivity-for-freebuff/archive/refs/tags/v0.1.0-test.2.tar.gz`  
+root directory `Connectivity-for-freebuff-0.1.0-test.2/`.
+
+## 6. Hardware ledger (repair pass, 2026-11-08)
+
+No Mi 12, HyperOS, Hyprland, Quickshell, Dolphin or KDE Connect session was
+available here. None of the rows below are implemented-and-tested on hardware.
+
+| Item | Code | This environment |
+|---|---|---|
+| B01 Pair once | implemented | **blocked** — no phone |
+| B02 Reconnect, including Wi-Fi toggle | implemented (unit-tested policy only) | **blocked** on a real link |
+| B03 Send file to phone | implemented | **blocked** |
+| B04 Receive file from phone | implemented | **blocked** |
+| B05 Clipboard to phone | implemented | **blocked** |
+| B06 Clipboard from phone | implemented | **blocked** |
+| B07 Notification mirror + reply | implemented (`notify.action` reply and dismiss) | **blocked** — not exercised on HyperOS |
+| Wi-Fi reconnect and sleep/wake recovery | implemented-unverified | **blocked** — no device sleep cycle was run |
+| Notification reply and dismissal | implemented-unverified | **blocked** end-to-end |
+| Quickshell on Hyprland | implemented-unverified (`integrations/quickshell/`) | **blocked** — no shell |
+| Dolphin on Hyprland | implemented-unverified (`integrations/dolphin/`) | **blocked** — no Dolphin session |
+| AppImage launch on Arch, path with spaces | entry point exists | **not run on Arch**. Ubuntu CI launches the AppImage from a path with spaces; that is not an Arch result |
+| KDE Connect remote-input baseline | procedure only | **blocked** — `docs/baseline-remote-input.md` |
+| DeX journeys C01–C05 | probe/start code implemented-unverified | **blocked** — no adb, scrcpy or phone. C05 native desktop mode remains **not-implemented** on this Android 15 target |
+
+## 7. Known remaining gaps
+
+* The published release was not modified. A newer candidate is appropriate if
+  the Arch asset should be a real makepkg package and the tag should be a commit
+  whose CI is green. Do not retag `v0.1.0-test.2`.
+* Device journeys, DeX, notification RemoteInput end-to-end, sleep/wake, and the
+  KDE Connect baseline still need the Mi 12 and a Hyprland session.
+* CI for the repair branch has to be read from GitHub Actions, not from a local
+  pytest run.
+

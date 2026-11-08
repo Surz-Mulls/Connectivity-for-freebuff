@@ -1,37 +1,65 @@
 {
   "schema": "continuity.status/1",
+  "updated": "2026-11-08T06:50:00Z",
   "project": "Connectivity for FreeBuff",
-  "stage": "candidate",
-  "module": "v0.1.0-test.2 (proposed, not published)",
+  "stage": "repair",
+  "module": "v0.1.0-test.2 published; post-release repair on branch Grok",
   "state": "waiting-user",
-  "branch": "FreeBuff",
-  "validated_commit": "dde059afc44c6a43f59a319756038a28b92ede04",
+  "branch": "Grok",
+  "base_branch_before_repair": "FreeBuff",
+  "base_commit_before_repair": "36c46a3efc09e828b320b576f6176cecdf098916",
   "tag": "v0.1.0-test.2",
-  "tag_published": false,
+  "tag_published": true,
+  "tag_target_commit": "8db808a7c70513f545f1eb8656579911ce4c59b1",
+  "release_published_at": "2026-11-05T06:20:42Z",
+  "release_url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.2",
+  "release_prerelease": true,
+  "release_draft": false,
   "main_modified": false,
+  "previous_release_untouched": {
+    "tag": "v0.1.0-test.1",
+    "commit": "8b1313371caa4b358dc63f34c85fc6cd7c1b1d3b",
+    "url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.1"
+  },
+  "published_asset_ledger": "docs/published-build-manifest-v0.1.0-test.2.json",
   "tests": {
-    "python": "95 passed (82 previous + reconnect/reservation/digest-policy additions)",
-    "android_jvm": "17 passed + 5 new ReconnectPolicy tests (run: ./gradlew :app:testDebugUnitTest quiet, exit 0)",
-    "android_lint": "not run in this pass",
-    "instrumented": "blocked: no device",
-    "hardware": "blocked: no phone, no compositor; see needs_user",
-    "ci": "not run from the cloud build host (workflow updated to the single canonical pipeline; first run must happen on GitHub)"
+    "python_claim_to_keep": "Do not cite the historical 95 as the CI count. CI must be the GitHub Actions run on branch Grok.",
+    "python_historical_local": "95 passed on the pre-release pass, via cd daemon && pytest. That invocation hid the tests package import bug.",
+    "android_jvm_historical": "22 JVM tests in tree (17 earlier + 5 ReconnectPolicyTest). The android job on run 41979767326 succeeded; re-count comes from the Grok CI run.",
+    "ci_on_tag": "failed — https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/41979767326 (python import, linux desktop-file-validate). android succeeded.",
+    "hardware": "not device-tested in this repair; see docs/VALIDATION_REPORT_v0.1.0-test.2.md section 6"
   },
   "artifacts": {
-    "apk": "dist/continuity-android-debug.apk (29,304,123 B, debug-signed, rebuilt with reconnect + approval fixes, not device-tested)",
-    "appimage": "dist/continuity-linux-x86_64.AppImage (98,195,960 B, self-contained, in-image self-test passed)",
-    "arch": "dist/continuity-linux-x86_64.pkg.tar.zst (159,978 B, makepkg-ready layout only, NOT makepkg-built or install-tested)",
-    "portable": "dist/continuity-linux-x86_64-portable.tar.zst (161,044 B, host Qt needed for UI)"
+    "published_apk_sha256": "3c4f37cf0f2f71f535cf832237f519ddd547b325c161a61f63f539528ad48406",
+    "published_appimage_sha256": "91de5e553cceeab78091ac4235e3ea06bf589bc2ef121e60f69ff9a39f8775f4",
+    "published_manual_arch_archive_sha256": "8b4248b2e4db42a3c30167a1daeabc3f21d8af914b43f673ed85594b29dc24cd",
+    "published_portable_sha256": "57a89e3eb1579c40c61a907685bc84e89b677aa319a1fd34e0d2ba841845269c",
+    "published_arch_is_makepkg": false,
+    "makepkg_pkgbuild_source_sha256": "aa817ab138cca16efecb15f59def0cfe59845fad852c0e989b015f69ed1e3698"
+  },
+  "hardware": {
+    "B01_pair": "implemented-unverified",
+    "B02_reconnect_wifi": "implemented-unverified",
+    "B03_send_file": "implemented-unverified",
+    "B04_receive_file": "implemented-unverified",
+    "B05_clipboard_to_phone": "implemented-unverified",
+    "B06_clipboard_from_phone": "implemented-unverified",
+    "B07_notification_reply": "implemented-unverified",
+    "wifi_reconnect_sleep_wake": "implemented-unverified",
+    "notification_reply_and_dismissal": "implemented-unverified",
+    "quickshell_hyprland": "implemented-unverified",
+    "dolphin_hyprland": "implemented-unverified",
+    "appimage_launch_arch_path_with_spaces": "not-run-on-arch",
+    "kde_connect_remote_input_baseline": "blocked",
+    "dex_journeys": "implemented-unverified",
+    "dex_native_desktop_mode_android_15": "not-implemented"
   },
   "needs_user": [
-    "Publish approval: create tag v0.1.0-test.2 on the validated commit and upload the 4 assets + SHA256SUMS + BUILD-MANIFEST.json + docs/VALIDATION_REPORT.md (existing v0.1.0-test.1 must not move)",
-    "Install the APK on the Mi 12 (HyperOS) and execute journeys B01-B07 incl. reconnect after Wi-Fi toggle and sleep/wake",
-    "Run the AppImage on Arch/Hyprland (incl. a path with spaces) and confirm the QML window, Quickshell panel, Dolphin action",
-    "Distrobox Arch build: `distrobox create -n arch -i ghcr.io/archlinux/archlinux:latest` then inside the box `bash scripts/package-linux.sh` so the Arch package is produced and install-tested by real makepkg (impossible in the cloud VM: no distrobox/podman, docker socket is root:docker 660, sudo is unavailable)",
-    "Run the CI workflow (push) and watch the linux job: verify-artifacts + AppImage type/exec/self-test steps"
+    "Do not retag or re-upload v0.1.0-test.2. Its Linux hashes differ from the pre-upload report because those three files were rebuilt at publish time; SHA256SUMS matches the published bytes.",
+    "Approve a new candidate (proposed v0.1.0-test.3) only if you want a release whose CI is green and whose Arch asset is the makepkg package rather than the manual layout archive.",
+    "Mi 12 / HyperOS: install the debug APK and run journeys B01–B07, including Wi-Fi toggle and sleep/wake. Notification reply and dismissal need the notification listener grant.",
+    "Arch + Hyprland: launch the AppImage from a path containing spaces; load integrations/quickshell and the Dolphin service menu; run docs/baseline-remote-input.md and record the evidence table.",
+    "DeX: with USB debugging already authorized, run journeys C01–C04. Do not expect native desktop mode on this Android 15 device."
   ],
-  "release_url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.1",
-  "tag_target_commit": "8b1313371caa4b358dc63f34c85fc6cd7c1b1d3b",
-  "docs_head_note": "v0.1.0-test.1 stays untouched; the v0.1.0-test.2 candidate is a separate un-published tag proposal",
-  "candidate_head_note": "STATUS.json records the head it was finalised against; a docs-only commit may follow it"
+  "docs_head_note": "STATUS.json before this repair said tag_published false and pointed release_url at v0.1.0-test.1 while PROGRESS.md already said v0.1.0-test.2 was published. Both now describe the same tag target, the same published hashes, and the same hardware limits."
 }
