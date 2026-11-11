@@ -152,6 +152,13 @@ Terminal=false
 X-AppImage-Version=0.1.0
 DESKTOP
 
+if ! command -v desktop-file-validate >/dev/null 2>&1; then
+  echo "desktop-file-validate is not installed." >&2
+  echo "Install desktop-file-utils before building the AppImage." >&2
+  exit 1
+fi
+desktop-file-validate "$APPDIR/continuity.desktop"
+
 chmod -R a+rX "$APPDIR"
 chmod a+rx "$APPDIR/AppRun"
 

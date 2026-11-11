@@ -176,9 +176,12 @@ available here. None of the rows below are implemented-and-tested on hardware.
 
 ## 7. Known remaining gaps
 
-* The published release was not modified. A newer candidate is appropriate if
-  the Arch asset should be a real makepkg package and the tag should be a commit
-  whose CI is green. Do not retag `v0.1.0-test.2`.
+* The published release was not modified by the 2026-11-09 Grok fixes either.
+  `packaging/PKGBUILD` still pins this tag archive. Candidate CI builds a separate
+  recipe from `git archive` of the commit under test
+  (`scripts/prepare-candidate-pkgbuild.sh`). That job had not been observed
+  green at the time this paragraph was written; do not treat it as a makepkg
+  result until the GitHub Actions log says so.
 * Device journeys, DeX, notification RemoteInput end-to-end, sleep/wake, and the
   KDE Connect baseline still need the Mi 12 and a Hyprland session.
 * CI for the repair branch has to be read from GitHub Actions, not from a local

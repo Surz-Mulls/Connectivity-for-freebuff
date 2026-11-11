@@ -5,6 +5,31 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-09 — Grok review fixes (release still untouched)
+
+Branch `Grok` is cut from `FreeBuff` `36c46a3efc09e828b320b576f6176cecdf098916`.
+`main`, `FreeBuff`, and the published `v0.1.0-test.2` release are not modified.
+
+- Python: `python -m pytest daemon/tests -q` from the repo root and
+  `python -m pytest -q` from `daemon/` both passed **95** tests
+  (2026-11-09, local CPython 3.12). `python -m continuityd.cli --help` and
+  `continuityd --help` both succeeded. This is not a GitHub Actions result.
+- Linux CI installs `desktop-file-utils`, `file`, `curl`, `ca-certificates`,
+  `libfuse2t64` and `zstd` explicitly. Application `.desktop` files are validated
+  with `desktop-file-validate`. A missing tool fails the build. The Dolphin file
+  stays a KDE `Type=Service` template; desktop-file-utils rejects that type, so
+  it is checked as a template rather than claimed to pass the freedesktop validator.
+- Distrobox remains optional. The project mount is set only on `distrobox create`.
+  `distrobox enter` is not passed `--volume`. An existing container without the
+  mount is not deleted; the script prints recovery steps and exits.
+- `packaging/PKGBUILD` stays pinned to the `v0.1.0-test.2` tag archive and its
+  measured SHA-256. Candidate builds use `scripts/prepare-candidate-pkgbuild.sh`,
+  which `git archive`s `HEAD` and refuses a recipe that still points at the tag.
+- makepkg itself was **not** executed in this environment (no Docker, no Distrobox,
+  privilege drop blocked). The `arch-makepkg` CI job is what has to prove it.
+- Device journeys stay **implemented-unverified** or **blocked**. Nothing here was
+  run on a Mi 12, HyperOS, Hyprland, Quickshell, Dolphin, or an Arch desktop.
+
 ## 2026-11-08 — post-release repair (branch `Grok`, release not mutated)
 
 v0.1.0-test.2 **is published** (2026-11-05T06:20:42Z, tag `8db808a7c70513f545f1eb8656579911ce4c59b1`).

@@ -1,14 +1,13 @@
-# Maintainer-facing Arch package definition.
+# Maintainer-facing Arch package definition for the published v0.1.0-test.2 sources.
 #
-# This is the only definition that produces a real pacman package. Build it with
-# `makepkg -sfC` (or scripts/build-arch-distrobox.sh). The file
-# dist/continuity-linux-x86_64.pkg.tar.zst written by scripts/package-linux.sh is a
-# manually assembled layout archive: it has no .BUILDINFO/.MTREE and must not be
-# described as a makepkg package.
+# `makepkg -sfC` with this file downloads the tag archive below. It does not
+# package the working tree. CI and scripts/build-arch-distrobox.sh call
+# scripts/prepare-candidate-pkgbuild.sh, which writes a separate recipe whose
+# source is `git archive` of the commit under test.
 #
-# Source is the immutable v0.1.0-test.2 tag archive (tag target 8db808a7). The
-# checksum below was measured twice from that URL on 2026-11-08 and both downloads
-# matched. Do not use SKIP.
+# dist/continuity-linux-x86_64.pkg.tar.zst from scripts/package-linux.sh is a
+# manually assembled layout archive. It has no .BUILDINFO or .MTREE and is not
+# a makepkg package.
 pkgname=continuity
 pkgver=0.1.0.test2
 pkgrel=1
@@ -19,11 +18,17 @@ license=('GPL-3.0-only')
 depends=('python' 'python-cryptography' 'python-zeroconf' 'python-qrcode' 'python-dbus-next'
          'qt6-declarative')
 optdepends=('python-pyside6: alternative QML runtime instead of qt6-declarative')
+# Source is the immutable v0.1.0-test.2 tag archive (tag target 8db808a7).
+# The checksum was measured from that URL (two downloads, same digest) on 2026-11-08.
+# Do not use SKIP. Candidate commits are not built from this URL: CI and
+# scripts/build-arch-distrobox.sh generate a separate recipe with
+# scripts/prepare-candidate-pkgbuild.sh so they package the commit under test.
+_srcdir_name="Connectivity-for-freebuff-0.1.0-test.2"
 source=("v0.1.0-test.2.tar.gz::https://github.com/Surz-Mulls/Connectivity-for-freebuff/archive/refs/tags/v0.1.0-test.2.tar.gz")
 sha256sums=('aa817ab138cca16efecb15f59def0cfe59845fad852c0e989b015f69ed1e3698')
 
 package() {
-  local src="$srcdir/Connectivity-for-freebuff-0.1.0-test.2"
+  local src="$srcdir/$_srcdir_name"
   install -dm0755 "$pkgdir/usr/lib/continuity" "$pkgdir/usr/bin" \
                    "$pkgdir/usr/share/applications" "$pkgdir/usr/share/licenses/continuity" \
                    "$pkgdir/usr/share/icons/hicolor/scalable/apps"

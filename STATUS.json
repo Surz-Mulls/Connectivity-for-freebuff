@@ -1,10 +1,10 @@
 {
   "schema": "continuity.status/1",
-  "updated": "2026-11-08T06:50:00Z",
+  "updated": "2026-11-09T09:40:00Z",
   "project": "Connectivity for FreeBuff",
   "stage": "repair",
-  "module": "v0.1.0-test.2 published; post-release repair on branch Grok",
-  "state": "waiting-user",
+  "module": "v0.1.0-test.2 published; Grok candidate not released",
+  "state": "candidate",
   "branch": "Grok",
   "base_branch_before_repair": "FreeBuff",
   "base_commit_before_repair": "36c46a3efc09e828b320b576f6176cecdf098916",
@@ -23,7 +23,8 @@
   },
   "published_asset_ledger": "docs/published-build-manifest-v0.1.0-test.2.json",
   "tests": {
-    "python_claim_to_keep": "Do not cite the historical 95 as the CI count. CI must be the GitHub Actions run on branch Grok.",
+    "python_claim_to_keep": "Local count is recorded in PROGRESS.md for the command that was run. A GitHub Actions result is separate and is not claimed until that run exists.",
+    "makepkg": "not executed here. arch-makepkg CI builds a git archive of the candidate commit via scripts/prepare-candidate-pkgbuild.sh. packaging/PKGBUILD remains pinned to the v0.1.0-test.2 tag.",
     "python_historical_local": "95 passed on the pre-release pass, via cd daemon && pytest. That invocation hid the tests package import bug.",
     "android_jvm_historical": "22 JVM tests in tree (17 earlier + 5 ReconnectPolicyTest). The android job on run 41979767326 succeeded; re-count comes from the Grok CI run.",
     "ci_on_tag": "failed — https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/41979767326 (python import, linux desktop-file-validate). android succeeded.",

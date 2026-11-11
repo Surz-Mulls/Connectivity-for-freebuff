@@ -19,6 +19,16 @@ WORK="$ROOT/build/linux"
 PORTABLE_NAME="continuity-linux-$ARCH-portable"
 STAGE="$WORK/$PORTABLE_NAME"
 mkdir -p "$DIST" "$WORK"
+rm -rf "$WORK"
+mkdir -p "$WORK"
+
+require_desktop_file_validate() {
+  if ! command -v desktop-file-validate >/dev/null 2>&1; then
+    echo "desktop-file-validate is not installed." >&2
+    echo "Install desktop-file-utils (Ubuntu: apt-get install desktop-file-utils)." >&2
+    exit 1
+  fi
+}
 
 PYTHON_BIN="${PYTHON:-python3}"
 if ! command -v zstd >/dev/null 2>&1; then
@@ -48,7 +58,6 @@ PY
 }
 
 # ------------------------------------------------------------------ portable staging
-rm -rf "$WORK"/* 2>/dev/null || true
 mkdir -p "$STAGE"/{bin,lib,qml,share/applications,share/icons/hicolor/scalable/apps}
 cp -r daemon/continuityd "$STAGE/lib/continuityd"
 cp -r desktop/qml/. "$STAGE/qml/"
@@ -78,6 +87,9 @@ Categories=Utility;Network;
 Terminal=false
 DESKTOP
 cp "$STAGE/continuity.desktop" "$STAGE/share/applications/continuity.desktop"
+require_desktop_file_validate
+desktop-file-validate "$STAGE/continuity.desktop"
+desktop-file-validate "$STAGE/share/applications/continuity.desktop"
 
 "$PYTHON_BIN" - "$STAGE/share/icons/hicolor/scalable/apps/continuity.svg" <<'PY'
 import sys
@@ -151,6 +163,7 @@ chmod 0755 "$PKG/usr/bin/continuity"
 
 sed 's|Exec=continuity-run|Exec=continuity|' "$STAGE/continuity.desktop" \
   > "$PKG/usr/share/applications/continuity.desktop"
+desktop-file-validate "$PKG/usr/share/applications/continuity.desktop"
 
 installed_size="$(du -sb "$PKG" | cut -f1)"
 cat > "$PKG/.PKGINFO" <<PKGINFO
