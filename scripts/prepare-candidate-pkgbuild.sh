@@ -15,6 +15,10 @@ if [ ! -d "$ROOT/.git" ] && ! git -C "$ROOT" rev-parse --is-inside-work-tree >/d
   exit 1
 fi
 mkdir -p "$DEST"
+# A bind-mounted checkout is owned by the host uid. Git 2.35+ refuses it
+# unless the directory is marked safe. This is the candidate tree, not a
+# different repository.
+git config --global --add safe.directory "$ROOT"
 commit="$(git -C "$ROOT" rev-parse HEAD)"
 echo "candidate commit: $commit"
 git -C "$ROOT" archive --format=tar.gz --prefix="continuity-candidate/" \
