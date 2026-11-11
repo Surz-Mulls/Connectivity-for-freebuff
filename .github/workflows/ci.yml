@@ -124,7 +124,7 @@ jobs:
         run: |
           mkdir -p dist/makepkg
           echo "candidate commit $(git rev-parse HEAD)"
-          docker run --rm -v "$PWD:/src" archlinux:latest bash -s <<'EOS'
+          docker run --rm -i -v "$PWD:/src" archlinux:latest bash -s <<'EOS'
           set -euo pipefail
           echo "makepkg candidate commit: $(git -C /src rev-parse HEAD)"
           pacman -Syu --noconfirm --needed \
@@ -156,8 +156,12 @@ jobs:
           cp -v "${built[0]}" /src/dist/makepkg/
           echo "makepkg build method: genuine makepkg of git archive $(git -C /src rev-parse HEAD)"
           EOS
+          mapfile -t produced < <(find dist/makepkg -maxdepth 1 -type f -name 'continuity-*.pkg.tar.zst' | sort)
+          test "${#produced[@]}" -eq 1
+          echo "host received ${produced[0]}"
       - uses: actions/upload-artifact@v4
         with:
           name: arch-makepkg-package
           path: dist/makepkg/*.pkg.tar.zst
+          if-no-files-found: error
 

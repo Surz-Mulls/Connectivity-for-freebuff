@@ -24,7 +24,7 @@
   "published_asset_ledger": "docs/published-build-manifest-v0.1.0-test.2.json",
   "tests": {
     "python_claim_to_keep": "Local count is recorded in PROGRESS.md for the command that was run. A GitHub Actions result is separate and is not claimed until that run exists.",
-    "makepkg": "not executed here. arch-makepkg CI builds a git archive of the candidate commit via scripts/prepare-candidate-pkgbuild.sh. packaging/PKGBUILD remains pinned to the v0.1.0-test.2 tag.",
+    "makepkg": "Run 42949083052 was a false green: docker run lacked -i, so bash -s exited before makepkg. Not a package build. The follow-up passes stdin through and fails if no .pkg.tar.zst is produced.",
     "python_historical_local": "95 passed on the pre-release pass, via cd daemon && pytest. That invocation hid the tests package import bug.",
     "android_jvm_historical": "22 JVM tests in tree (17 earlier + 5 ReconnectPolicyTest). The android job on run 41979767326 succeeded; re-count comes from the Grok CI run.",
     "ci_on_tag": "failed — https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/41979767326 (python import, linux desktop-file-validate). android succeeded.",

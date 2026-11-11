@@ -5,6 +5,22 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-11 — Grok pushed; first arch job was a false green
+
+[Run 42949083052](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/42949083052)
+on `6827818` finished green, but `arch-makepkg` did not build a package.
+`docker run` was missing `-i`, so the container's `bash -s` read an empty
+stdin, exited 0, and the artifact upload only warned that no
+`.pkg.tar.zst` was present. That run is **not** a makepkg result.
+Python on that run: **95 passed**. Linux desktop validation and the
+AppImage self-test, including a path with spaces, passed. Android
+`testDebugUnitTest` and `assembleDebug` were `BUILD SUCCESSFUL`; the log
+did not print a numeric test count.
+
+The follow-up gives `docker run` stdin and fails the job if the host has
+no package. Genuine makepkg remains **implemented-unverified** until a
+later run's log shows `makepkg` output and an uploaded package.
+
 ## 2026-11-09 — Grok review fixes (release still untouched)
 
 Branch `Grok` is cut from `FreeBuff` `36c46a3efc09e828b320b576f6176cecdf098916`.
