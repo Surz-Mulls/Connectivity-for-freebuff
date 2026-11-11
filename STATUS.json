@@ -1,6 +1,6 @@
 {
   "schema": "continuity.status/1",
-  "updated": "2026-11-09T09:40:00Z",
+  "updated": "2026-11-11T03:05:00Z",
   "project": "Connectivity for FreeBuff",
   "stage": "repair",
   "module": "v0.1.0-test.2 published; Grok candidate not released",
@@ -24,7 +24,7 @@
   "published_asset_ledger": "docs/published-build-manifest-v0.1.0-test.2.json",
   "tests": {
     "python_claim_to_keep": "Local count is recorded in PROGRESS.md for the command that was run. A GitHub Actions result is separate and is not claimed until that run exists.",
-    "makepkg": "Run 42949083052 was a false green: docker run lacked -i, so bash -s exited before makepkg. Not a package build. The follow-up passes stdin through and fails if no .pkg.tar.zst is produced.",
+    "makepkg": "implemented-and-tested in CI run 42949932184 on 6cbbf4123b0d8e942caf21d8ad6af0ca1d7444ba. Package continuity-0.1.0.test2-1-x86_64.pkg.tar.zst has .PKGINFO .BUILDINFO .MTREE. Source was git archive of that commit, not the v0.1.0-test.2 tag. Run 42949083052 was a false green (docker stdin). Run 42949506073 died before makepkg (dubious ownership).",
     "python_historical_local": "95 passed on the pre-release pass, via cd daemon && pytest. That invocation hid the tests package import bug.",
     "android_jvm_historical": "22 JVM tests in tree (17 earlier + 5 ReconnectPolicyTest). The android job on run 41979767326 succeeded; re-count comes from the Grok CI run.",
     "ci_on_tag": "failed — https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/41979767326 (python import, linux desktop-file-validate). android succeeded.",

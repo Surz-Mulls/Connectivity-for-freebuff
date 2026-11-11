@@ -5,6 +5,28 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-11 — makepkg of the Grok commit actually ran
+
+[Run 42949932184](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/42949932184)
+on `6cbbf4123b0d8e942caf21d8ad6af0ca1d7444ba` is the one that counts.
+
+- `arch-makepkg`: **success**. Log shows `Finished making: continuity 0.1.0.test2-1`,
+  source `continuity-candidate.tar.gz` for that commit (not the v0.1.0-test.2 tag),
+  `verify-arch-install: ok (makepkg package, qml=qml6)`, and an uploaded
+  `continuity-0.1.0.test2-1-x86_64.pkg.tar.zst` (78081 bytes) containing
+  `.PKGINFO`, `.BUILDINFO` and `.MTREE`. `libfakeroot` printed
+  `payload not recognized` and the build still finished under fakeroot 1.37.2.
+- python: **95 passed**. linux: desktop validation and AppImage self-test passed,
+  including a path with spaces. android: `testDebugUnitTest` and `assembleDebug`
+  `BUILD SUCCESSFUL`. The log still does not print a numeric Android count;
+  the tree has 22 `@Test` methods.
+- Earlier Grok runs do not count as makepkg: 42949083052 never started the
+  recipe (`docker run` without `-i`), and 42949506073 stopped at git
+  "dubious ownership" after installing packages.
+- Device journeys remain **implemented-unverified** or **blocked**. No phone,
+  Hyprland, or Arch desktop was used. The published `v0.1.0-test.2` release
+  was not modified. Its Arch asset is still the manual archive.
+
 ## 2026-11-11 — Grok pushed; first arch job was a false green
 
 [Run 42949083052](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/42949083052)

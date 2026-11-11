@@ -126,7 +126,6 @@ jobs:
           echo "candidate commit $(git rev-parse HEAD)"
           docker run --rm -i -v "$PWD:/src" archlinux:latest bash -s <<'EOS'
           set -euo pipefail
-          echo "makepkg candidate commit: $(git -C /src rev-parse HEAD)"
           pacman -Syu --noconfirm --needed \
             base-devel git sudo python python-cryptography python-zeroconf \
             python-qrcode python-dbus-next qt6-declarative
