@@ -8,46 +8,14 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from pathlib import Path
 
 import pytest
 
-from continuityd.config import Settings
 from continuityd.protocol import ProtocolError
 from continuityd.session import SessionError
-from continuityd.transfers import MAX_CONCURRENT, TransferService
+from continuityd.transfers import MAX_CONCURRENT
 
-FPR_A = "a" * 64
-FPR_B = "b" * 64
-
-
-class _Peer:
-    def __init__(self, fingerprint: str = FPR_A, name: str = "desktop") -> None:
-        self.fingerprint = fingerprint
-        self.name = name
-
-
-class _Session:
-    def __init__(self, fingerprint: str = FPR_A, name: str = "desktop") -> None:
-        self.peer = _Peer(fingerprint, name)
-
-
-def _service(tmp_path: Path, **kwargs) -> TransferService:
-    approver = kwargs.pop("approver", None)
-    return TransferService(Settings(receive_dir=str(tmp_path / "inbox"), **kwargs),
-                           approver=approver)
-
-
-async def _offer(service: TransferService, session: _Session, *, transfer_id: str | None = None,
-                 name: str = "note.txt", payload: bytes = b"hello",
-                 digest: str | None = None) -> tuple[str, bytes, dict]:
-    if transfer_id is None:
-        transfer_id = str(uuid.uuid4())
-    digest = digest or hashlib.sha256(payload).hexdigest()
-    reply = await service.on_offer(session, {
-        "transfer_id": transfer_id, "name": name, "size": len(payload), "sha256": digest,
-    })
-    return transfer_id, payload, reply
+from tests.transfer_support import FPR_A, FPR_B, _Session, _offer, _service
 
 
 async def test_transfer_ids_must_be_canonical_uuids(tmp_path):
