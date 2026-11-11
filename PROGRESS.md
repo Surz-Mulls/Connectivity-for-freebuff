@@ -241,3 +241,12 @@ were then applied on `FreeBuff`.
   desktop-file-validate 0.28 clean, ShellCheck 0.10.0 clean, full Linux packaging exit 0,
   AppImage extract-and-run self-test passed. FUSE mode cannot run in this container (no `/dev/fuse`);
   CI covers it. Docker/real makepkg and real Distrobox are unavailable here.
+
+## 2026-11-11 — FreeBuff CI green
+
+[Run 42955481424](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/42955481424) on
+`2bb8a85194f8092a68df043d31451416ed3e5af2`: python, android, linux and arch-makepkg all **success**. The linux job ran the mocked
+Distrobox wrapper tests (29 assertions), ShellCheck, the desktop-entry validator and both AppImage
+self-test modes. arch-makepkg built and verified a genuine package with `.PKGINFO`, `.BUILDINFO`
+and `.MTREE`. This is the final validation for the published FreeBuff code commit; the following
+docs-only commit does not change artifacts.

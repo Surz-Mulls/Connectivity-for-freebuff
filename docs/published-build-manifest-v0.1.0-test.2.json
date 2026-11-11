@@ -87,6 +87,12 @@
       "commit": "9f74b6add78c97f608127c819f6562a4081238f7",
       "jobs": "python, android, linux, arch-makepkg all succeeded",
       "note": "Grok branch validation; published assets were not touched"
+    },
+    {
+      "run": 42955481424,
+      "commit": "2bb8a85194f8092a68df043d31451416ed3e5af2",
+      "jobs": "python, android, linux, arch-makepkg all succeeded",
+      "note": "final FreeBuff validation; published release assets were not modified"
     }
   ],
   "assets_unchanged_since_publish": true,

@@ -200,7 +200,7 @@ repairs were applied on `FreeBuff`.
 |---|---|---|
 | [42949932184](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/42949932184) | `6cbbf4123b0d8e942caf21d8ad6af0ca1d7444ba` | success; first genuine `makepkg` package (`continuity-0.1.0.test2-1-x86_64.pkg.tar.zst`) with `.PKGINFO`, `.BUILDINFO`, `.MTREE` |
 | [42950428961](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/42950428961) | `9f74b6add78c97f608127c819f6562a4081238f7` | success, all four jobs: python, android, linux, arch-makepkg |
-| final FreeBuff run | recorded in `STATUS.json` / `PROGRESS.md` after publication | see those files for the exact run and commit |
+| [42955481424](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/42955481424) | `2bb8a85194f8092a68df043d31451416ed3e5af2` | success, all four jobs: python, android, linux, arch-makepkg — final FreeBuff validation for the code commit; docs-only commits after it do not change artifacts |
 
 ### Changes in this pass
 | Area | Change | Status |
