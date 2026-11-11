@@ -10,7 +10,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-VERSION="0.1.0"
 PY_VER="3.12"
 PYSIDE="6.12.0"
 #: pinned tooling: appimagetool release. The GitHub release body is queried for a published
@@ -147,7 +146,7 @@ Name=Continuity
 Comment=Clipboard, files and notifications between this desktop and your phone
 Exec=AppRun
 Icon=continuity
-Categories=Utility;Network;
+Categories=Network;FileTransfer;
 Terminal=false
 X-AppImage-Version=0.1.0
 DESKTOP

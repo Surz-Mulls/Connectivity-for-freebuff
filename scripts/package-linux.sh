@@ -83,7 +83,7 @@ Name=Continuity
 Comment=Clipboard, files and notifications between this desktop and your phone
 Exec=continuity-run
 Icon=continuity
-Categories=Utility;Network;
+Categories=Network;FileTransfer;
 Terminal=false
 DESKTOP
 cp "$STAGE/continuity.desktop" "$STAGE/share/applications/continuity.desktop"

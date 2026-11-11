@@ -1,11 +1,19 @@
 {
   "schema": "continuity.status/1",
-  "updated": "2026-11-11T03:05:00Z",
+  "updated": "2026-11-11T00:00:00Z",
   "project": "Connectivity for FreeBuff",
   "stage": "repair",
-  "module": "v0.1.0-test.2 published; Grok candidate not released",
+  "module": "v0.1.0-test.2 published; Grok work incorporated into FreeBuff; final candidate not released",
   "state": "candidate",
-  "branch": "Grok",
+  "branch": "FreeBuff",
+  "grok_handoff": {
+    "branch": "Grok",
+    "head_commit": "9f74b6add78c97f608127c819f6562a4081238f7",
+    "preserved": true,
+    "incorporated_by": "fast-forward: origin/FreeBuff 36c46a3efc09e828b320b576f6176cecdf098916 was a strict ancestor of origin/Grok, so no history was rewritten",
+    "ci_run": 42950428961,
+    "ci_result": "all four jobs succeeded (python, android, linux, arch-makepkg) on commit 9f74b6add78c97f608127c819f6562a4081238f7"
+  },
   "base_branch_before_repair": "FreeBuff",
   "base_commit_before_repair": "36c46a3efc09e828b320b576f6176cecdf098916",
   "tag": "v0.1.0-test.2",
@@ -23,10 +31,14 @@
   },
   "published_asset_ledger": "docs/published-build-manifest-v0.1.0-test.2.json",
   "tests": {
-    "python_claim_to_keep": "Local count is recorded in PROGRESS.md for the command that was run. A GitHub Actions result is separate and is not claimed until that run exists.",
-    "makepkg": "implemented-and-tested in CI run 42949932184 on 6cbbf4123b0d8e942caf21d8ad6af0ca1d7444ba. Package continuity-0.1.0.test2-1-x86_64.pkg.tar.zst has .PKGINFO .BUILDINFO .MTREE. Source was git archive of that commit, not the v0.1.0-test.2 tag. Run 42949083052 was a false green (docker stdin). Run 42949506073 died before makepkg (dubious ownership).",
+    "python_local": "95 passed with (cd daemon && ../.venv/bin/python -m pytest -q) on the FreeBuff takeover tree; CLI smoke: python -m continuityd.cli --help and continuityd --help exit 0.",
+    "android_local": "JVM unit tests and assembleDebug: BUILD SUCCESSFUL in this takeover environment. The tree has 22 @Test methods (17 earlier + 5 ReconnectPolicyTest). The CI android job on run 42950428961 also succeeded.",
+    "desktop_entries": "implemented-and-tested: desktop-file-validate 0.28 accepts packaging/continuity.desktop; scripts/validate-desktop-entries.py checks the freedesktop rules for application entries and the KDE service-menu rules for integrations/dolphin/continuity-send.desktop.",
+    "shellcheck": "implemented-and-tested: ShellCheck 0.10.0 -x -S warning clean for the seven scripts the CI step lists, including scripts/build-arch-distrobox.sh and scripts/tests/test_build_arch_distrobox.sh.",
+    "distrobox_wrapper": "implemented-and-tested (mocked): scripts/tests/test_build_arch_distrobox.sh, 29 assertions covering create-time volume, --no-tty, reuse, missing-mount recovery, no sudoers rule, root refusal, exit-code propagation, paths with spaces and heredoc execution. Real Distrobox integration is implemented-unverified: this cloud VM has no distrobox/podman daemon access.",
+    "makepkg": "implemented-and-tested in CI run 42950428961 on 9f74b6add78c97f608127c819f6562a4081238f7 (arch-makepkg job success). Earlier run 42949932184 on 6cbbf4123b0d8e942caf21d8ad6af0ca1d7444ba also built continuity-0.1.0.test2-1-x86_64.pkg.tar.zst with .PKGINFO, .BUILDINFO and .MTREE from a git archive of that commit, not the v0.1.0-test.2 tag. Run 42949083052 was a false green (docker stdin) and 42949506073 died before makepkg (dubious ownership).",
     "python_historical_local": "95 passed on the pre-release pass, via cd daemon && pytest. That invocation hid the tests package import bug.",
-    "android_jvm_historical": "22 JVM tests in tree (17 earlier + 5 ReconnectPolicyTest). The android job on run 41979767326 succeeded; re-count comes from the Grok CI run.",
+    "android_jvm_historical": "22 JVM tests in tree (17 earlier + 5 ReconnectPolicyTest). The android job on run 41979767326 succeeded; the Grok CI run 42950428961 also succeeded.",
     "ci_on_tag": "failed — https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/41979767326 (python import, linux desktop-file-validate). android succeeded.",
     "hardware": "not device-tested in this repair; see docs/VALIDATION_REPORT_v0.1.0-test.2.md section 6"
   },
@@ -60,7 +72,8 @@
     "Approve a new candidate (proposed v0.1.0-test.3) only if you want a release whose CI is green and whose Arch asset is the makepkg package rather than the manual layout archive.",
     "Mi 12 / HyperOS: install the debug APK and run journeys B01–B07, including Wi-Fi toggle and sleep/wake. Notification reply and dismissal need the notification listener grant.",
     "Arch + Hyprland: launch the AppImage from a path containing spaces; load integrations/quickshell and the Dolphin service menu; run docs/baseline-remote-input.md and record the evidence table.",
-    "DeX: with USB debugging already authorized, run journeys C01–C04. Do not expect native desktop mode on this Android 15 device."
+    "DeX: with USB debugging already authorized, run journeys C01–C04. Do not expect native desktop mode on this Android 15 device.",
+    "Optional real Distrobox integration: on a machine with distrobox+podman, run scripts/build-arch-distrobox.sh and scripts/verify-arch-install.sh; the wrapper tests here are mocked."
   ],
-  "docs_head_note": "STATUS.json before this repair said tag_published false and pointed release_url at v0.1.0-test.1 while PROGRESS.md already said v0.1.0-test.2 was published. Both now describe the same tag target, the same published hashes, and the same hardware limits."
+  "docs_head_note": "STATUS.json before the Grok repair said tag_published false and pointed release_url at v0.1.0-test.1 while PROGRESS.md already said v0.1.0-test.2 was published. Both now describe the same tag target, the same published hashes, and the same hardware limits."
 }

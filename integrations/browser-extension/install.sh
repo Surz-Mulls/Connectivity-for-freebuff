@@ -19,7 +19,7 @@ WEOF
 # Interpolated values must be written by the quoting-aware expansion below, not inside heredocs.
 {
   printf '#!/usr/bin/env bash\n'
-  printf 'exec python3 %q %q "$@"\n' "$HOST_SCRIPT"
+  printf 'exec python3 %q "$@"\n' "$HOST_SCRIPT"
 } > "$WRAPPER"
 chmod 0755 "$WRAPPER"
 

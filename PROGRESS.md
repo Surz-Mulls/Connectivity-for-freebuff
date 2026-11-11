@@ -208,3 +208,36 @@ Published https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v
 (prerelease, tag at `8db808a`). Assets uploaded: debug APK, AppImage, Arch `.tar.zst`, portable
 `.tar.zst`, `SHA256SUMS`, `BUILD-MANIFEST.json`, validation report. **Every asset was re-downloaded
 from the release URL and its SHA-256 was re-verified.** `main` and `v0.1.0-test.1` untouched.
+
+## 2026-11-11 — Grok work taken over, finished and published on FreeBuff
+
+`origin/Grok` (`9f74b6a`) was a strict descendant of `origin/FreeBuff` (`36c46a3`), so the handoff was
+a fast-forward: no history rewritten, no force-push, `Grok` left untouched. The remaining repairs
+were then applied on `FreeBuff`.
+
+- **Distrobox wrapper** (`scripts/build-arch-distrobox.sh`): full `pacman -Syu` instead of the
+  unsupported partial `-Sy`; every scripted step uses `distrobox enter --no-tty`; exit codes are
+  captured and re-propagated; the volume is create-time only; an existing container without the
+  mount is never deleted — the script prints exact recovery steps; the `NOPASSWD: ALL` sudoers rule
+  and `useradd builder` are gone and the script refuses to build as root.
+- **Wrapper tests** (`scripts/tests/test_build_arch_distrobox.sh`): 29 mocked assertions — syntax,
+  create-time volume, `--no-tty`, reuse, missing-mount recovery, no sudoers rule, root refusal,
+  exit-code propagation, paths with spaces, heredoc execution. No container or system change is
+  made. Real Distrobox integration remains **implemented-unverified**.
+- **Arch package verification** (`scripts/verify-arch-package.sh`): requires `.PKGINFO`,
+  `.BUILDINFO` and `.MTREE`, rejects the manually assembled layout archive, and is called by the
+  makepkg CI job and the Distrobox wrapper. `packaging/PKGBUILD` stays pinned to the published tag;
+  `scripts/prepare-candidate-pkgbuild.sh` still generates the candidate recipe from the commit.
+- **Desktop entries**: `Categories=Utility;Network;` (two main categories, invalid) is now
+  `Network;FileTransfer;` in the package, portable and AppImage entries.
+  `scripts/validate-desktop-entries.py` validates application entries with the freedesktop rules and
+  the Dolphin file with the KDE service-menu rules, because `desktop-file-validate` rejects
+  `Type=Service` outright.
+- **CI**: `checkout@v7`, `setup-python@v7`, `setup-java@v6`, `upload-artifact@v7` (Node 24 majors);
+  new ShellCheck step, mocked Distrobox wrapper tests, desktop validator and package-metadata check.
+  ShellCheck found and fixed a real `printf` format bug in
+  `integrations/browser-extension/install.sh` (two `%q`, one argument).
+- **Verified locally**: Python 95 passed, CLI smoke ok, Android JVM + assembleDebug successful,
+  desktop-file-validate 0.28 clean, ShellCheck 0.10.0 clean, full Linux packaging exit 0,
+  AppImage extract-and-run self-test passed. FUSE mode cannot run in this container (no `/dev/fuse`);
+  CI covers it. Docker/real makepkg and real Distrobox are unavailable here.

@@ -74,5 +74,21 @@
     "sha256": "aa817ab138cca16efecb15f59def0cfe59845fad852c0e989b015f69ed1e3698",
     "root": "Connectivity-for-freebuff-0.1.0-test.2/",
     "downloads_compared": 2
-  }
+  },
+  "validation_history": [
+    {
+      "run": 42949932184,
+      "commit": "6cbbf4123b0d8e942caf21d8ad6af0ca1d7444ba",
+      "jobs": "success",
+      "note": "first genuine makepkg package (continuity-0.1.0.test2-1-x86_64.pkg.tar.zst) built from a candidate git archive"
+    },
+    {
+      "run": 42950428961,
+      "commit": "9f74b6add78c97f608127c819f6562a4081238f7",
+      "jobs": "python, android, linux, arch-makepkg all succeeded",
+      "note": "Grok branch validation; published assets were not touched"
+    }
+  ],
+  "assets_unchanged_since_publish": true,
+  "historical_note": "The published Arch asset remains the manually assembled layout archive. The makepkg package produced by CI is a separate artifact and was never uploaded."
 }

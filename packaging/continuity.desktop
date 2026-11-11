@@ -4,5 +4,5 @@ Name=Continuity
 Comment=Clipboard, files and notifications between this desktop and your phone
 Exec=continuity
 Icon=continuity
-Categories=Utility;Network;
+Categories=Network;FileTransfer;
 Terminal=false

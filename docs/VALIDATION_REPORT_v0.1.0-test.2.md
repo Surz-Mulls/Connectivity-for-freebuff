@@ -187,3 +187,30 @@ available here. None of the rows below are implemented-and-tested on hardware.
 * CI for the repair branch has to be read from GitHub Actions, not from a local
   pytest run.
 
+
+## 7. Final FreeBuff takeover pass (2026-11-11)
+
+`origin/Grok` (`9f74b6add78c97f608127c819f6562a4081238f7`) was a strict descendant of
+`origin/FreeBuff` (`36c46a3efc09e828b320b576f6176cecdf098916`): it was incorporated by
+fast-forward, no history was rewritten, and the `Grok` branch was left untouched. The remaining
+repairs were applied on `FreeBuff`.
+
+### CI evidence
+| Run | Tested commit | Result |
+|---|---|---|
+| [42949932184](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/42949932184) | `6cbbf4123b0d8e942caf21d8ad6af0ca1d7444ba` | success; first genuine `makepkg` package (`continuity-0.1.0.test2-1-x86_64.pkg.tar.zst`) with `.PKGINFO`, `.BUILDINFO`, `.MTREE` |
+| [42950428961](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/42950428961) | `9f74b6add78c97f608127c819f6562a4081238f7` | success, all four jobs: python, android, linux, arch-makepkg |
+| final FreeBuff run | recorded in `STATUS.json` / `PROGRESS.md` after publication | see those files for the exact run and commit |
+
+### Changes in this pass
+| Area | Change | Status |
+|---|---|---|
+| Distrobox wrapper | `pacman -Syu`, `--no-tty` for every scripted step, create-time volume only, reuse-with-recovery for existing containers, no sudoers rule, root build refused, exit codes propagated | implemented-and-tested (mocked) |
+| Wrapper tests | `scripts/tests/test_build_arch_distrobox.sh`, 29 assertions, fakes on PATH, no containers touched | implemented-and-tested |
+| Arch package metadata | `scripts/verify-arch-package.sh` requires `.PKGINFO`/`.BUILDINFO`/`.MTREE` and rejects the manual layout archive; wired into CI and Distrobox | implemented-and-tested in CI |
+| Desktop entries | `Network;FileTransfer;` replaces the invalid double-main `Utility;Network;`; Dolphin KDE service validated by its own rules | implemented-and-tested |
+| GitHub Actions | Node 24 majors (`checkout@v7`, `setup-python@v7`, `setup-java@v6`, `upload-artifact@v7`) | implemented-and-tested in CI |
+| ShellCheck | New CI step; fixed a real `printf` format bug in the browser-extension installer | implemented-and-tested |
+| Real Distrobox run | Needs distrobox+podman on a real host; unavailable in this VM | implemented-unverified |
+| Docker `makepkg` local | Docker socket is root-only here; exercised only by CI | implemented-unverified locally, tested in CI |
+| FUSE AppImage launch | `/dev/fuse` absent in this container; extract-and-run self-test passed locally, CI covers FUSE | implemented-unverified locally, tested in CI |
