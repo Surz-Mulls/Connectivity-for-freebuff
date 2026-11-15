@@ -5,6 +5,22 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-15 — C1 AppImage interpreter must be ELF
+
+Parent of this commit: `fdc98423cba77b1d457efd6fd99f67c2cd935823` (Grok fast-forwarded
+to FreeBuff; that sync's CI is run 43711905315, still in progress when this was written).
+
+`scripts/build-appimage.sh` now refuses a `python3.12` that is not an ELF file,
+requires every file in the image's `usr/bin` to be ELF, and fails if launcher
+text contains `/opt/freestyle`, `/home/` or `/root/`.
+
+Local evidence, not CI: `bash scripts/tests/test_appimage_elf_guard.sh` printed
+`elf-guard rejected a non-ELF python3.12 (exit 1)`. ShellCheck 0.10.0
+`-x -S warning` on `scripts/build-appimage.sh` and the new test was clean.
+The good-path AppImage build is **implemented-unverified** until this commit's
+linux job is read. The published v0.1.0-test.1 and v0.1.0-test.2 AppImages
+are unchanged and still contain the wrapper defect.
+
 ## 2026-11-11 — makepkg of the Grok commit actually ran
 
 [Run 42949932184](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/42949932184)

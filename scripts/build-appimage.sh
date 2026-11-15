@@ -69,7 +69,17 @@ mkdir -p "$APPDIR/usr/bin" "$BUNDLE/site-packages" "$APPDIR/usr/share/applicatio
          "$APPDIR/usr/share/icons/hicolor/scalable/apps"
 
 echo "== staging CPython"
+is_elf() { [ "$(head -c4 "$1" 2>/dev/null | od -An -tx1 | tr -d ' \n')" = "7f454c46" ]; }
+command -v "python$PY_VER" >/dev/null 2>&1 || {
+  echo "python$PY_VER is not on PATH" >&2
+  exit 1
+}
 PYTHON_BIN="$(readlink -f "$(command -v python$PY_VER)")"
+is_elf "$PYTHON_BIN" || {
+  echo "python$PY_VER resolves to $PYTHON_BIN, which is not an ELF executable." >&2
+  echo "Use a real CPython $PY_VER (or a relocatable python-build-standalone build)." >&2
+  exit 1
+}
 cp "$PYTHON_BIN" "$APPDIR/usr/bin/python$PY_VER"
 mkdir -p "$APPDIR/usr/lib"
 for lib in /usr/lib/x86_64-linux-gnu/libpython$PY_VER.so.1.0 /usr/lib/libpython$PY_VER.so.1.0 \
@@ -160,6 +170,16 @@ desktop-file-validate "$APPDIR/continuity.desktop"
 
 chmod -R a+rX "$APPDIR"
 chmod a+rx "$APPDIR/AppRun"
+
+echo "== clean-room checks on the image contents"
+for f in "$APPDIR"/usr/bin/*; do
+  is_elf "$f" || { echo "non-ELF file in usr/bin: $f" >&2; exit 1; }
+done
+if grep -rIl -e "/opt/freestyle" -e "/home/" -e "/root/" \
+     "$APPDIR/AppRun" "$APPDIR/appenv.sh" "$APPDIR/usr/bin" 2>/dev/null | grep -q .; then
+  echo "host-specific absolute paths found in the launcher files" >&2
+  exit 1
+fi
 
 echo "== self-test inside the image"
 QT_QPA_PLATFORM=offscreen "$APPDIR/AppRun" --self-test
