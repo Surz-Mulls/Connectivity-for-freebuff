@@ -84,6 +84,7 @@ jobs:
             scripts/package-linux.sh \
             scripts/build-appimage.sh \
             scripts/tests/test_appimage_elf_guard.sh \
+            scripts/tests/test_appimage_tool_pin.sh \
             integrations/browser-extension/install.sh \
             integrations/browser-extension/uninstall.sh
       - name: Validate desktop entries
@@ -99,6 +100,8 @@ jobs:
         run: bash scripts/tests/test_build_arch_distrobox.sh
       - name: AppImage rejects a non-ELF interpreter
         run: bash scripts/tests/test_appimage_elf_guard.sh
+      - name: AppImage rejects a tampered appimagetool
+        run: bash scripts/tests/test_appimage_tool_pin.sh
       - name: Build Linux deliverables (canonical pipeline; AppImage failure is fatal)
         run: bash scripts/package-linux.sh
       - name: Verify artifacts

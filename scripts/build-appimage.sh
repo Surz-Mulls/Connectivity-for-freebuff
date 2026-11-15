@@ -3,22 +3,24 @@
 # (including the QML modules) and the app itself, all inside the image.
 #
 # This is the ONE canonical AppImage builder (scripts/package-linux.sh delegates to it). It works
-# from a clean checkout: it provisions its own build venv and its own pinned appimagetool, and
-# verifies the tool's SHA-256 before executing anything it downloaded. Every step fails the build —
-# a host-dependent tarball is never labelled an AppImage.
+# from a clean checkout: it provisions its own build venv, a pinned appimagetool, and a pinned
+# relocatable CPython. Both downloads are checked against a hard-coded SHA-256 before anything
+# downloaded is executed. A host Python on PATH is not copied into the image.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 PY_VER="3.12"
 PYSIDE="6.12.0"
-#: pinned tooling: appimagetool release. The GitHub release body is queried for a published
-#: SHA-256 of this exact asset; when one is published it is verified before first execution. When
-#: the project publishes no checksum (as of 1.x it does not for this asset) the downloaded file is
-#: NOT silently trusted: its measured hash is recorded in the build log and manifest, and the
-#: built image must pass the in-image self-test below before anything is accepted as an artifact.
 APPIMAGETOOL_TAG="1.9.0"
 APPIMAGETOOL_URL="https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_TAG}/appimagetool-x86_64.AppImage"
+# Measured 2026-11-15 from the URL above. Size 12632352. The asset's own text identifies a
+# continuous build; the tag is 1.9.0. Provenance: docs/PINNED_TOOLING.md.
+APPIMAGETOOL_SHA256="46fdd785094c7f6e545b61afcfb0f3d98d8eab243f644b4b17698c01d06083d1"
+# python-build-standalone install_only, tag 20261110. Max GLIBC symbol on the interpreter is 2.17.
+CPYTHON_NAME="cpython-3.12.16+20261110-x86_64-unknown-linux-gnu-install_only.tar.gz"
+CPYTHON_URL="https://github.com/astral-sh/python-build-standalone/releases/download/20261110/${CPYTHON_NAME}"
+CPYTHON_SHA256="c2f87d4b4e8db3abddb0f116c6ccfc503d0cbdbb9ee8faacddad1b679ec12e99"
 DIST="$ROOT/dist"
 WORK="$ROOT/build/appimage"
 APPDIR="$WORK/AppDir"
@@ -26,6 +28,20 @@ BUNDLE="$APPDIR/usr/lib/python$PY_VER"
 OUT="$DIST/continuity-linux-x86_64.AppImage"
 TOOL="$ROOT/.toolchain/appimage/squashfs-root/AppRun"
 VENV="$ROOT/build/appimage-venv"
+
+is_elf() { [ "$(head -c4 "$1" 2>/dev/null | od -An -tx1 | tr -d ' \n')" = "7f454c46" ]; }
+
+# Regression hook only. Production builds leave this unset and use the pinned tarball below.
+if [ -n "${CONTINUITY_APPIMAGE_PYTHON_OVERRIDE:-}" ]; then
+  PYTHON_BIN="$(readlink -f "$CONTINUITY_APPIMAGE_PYTHON_OVERRIDE")"
+  is_elf "$PYTHON_BIN" || {
+    echo "python$PY_VER resolves to $PYTHON_BIN, which is not an ELF executable." >&2
+    echo "Use a real CPython $PY_VER (or a relocatable python-build-standalone build)." >&2
+    exit 1
+  }
+  echo "CONTINUITY_APPIMAGE_PYTHON_OVERRIDE is not a substitute for the pinned CPython." >&2
+  exit 1
+fi
 
 USE_DEV_VENV=1
 if [ ! -x "$ROOT/.venv/bin/pip" ]; then
@@ -37,28 +53,37 @@ fi
 PIP="$( [ "$USE_DEV_VENV" = 1 ] && echo "$ROOT/.venv/bin/pip" || echo "$VENV/bin/pip" )"
 PY="$( [ "$USE_DEV_VENV" = 1 ] && echo "$ROOT/.venv/bin/python" || echo "$VENV/bin/python" )"
 
+verify_sha256() {
+  local file="$1" expected="$2" label="$3"
+  local measured
+  measured="$(sha256sum "$file" | cut -d' ' -f1)"
+  if [ "$measured" != "$expected" ]; then
+    echo "$label checksum mismatch (pinned $expected, measured $measured)" >&2
+    exit 1
+  fi
+  echo "$label checksum verified: $measured"
+}
+
+fetch_verified() {
+  local url="$1" dest="$2" expected="$3" label="$4"
+  local tmp measured
+  tmp="$(mktemp)"
+  curl -fL --retry 2 --max-time 180 -o "$tmp" "$url"
+  measured="$(sha256sum "$tmp" | cut -d' ' -f1)"
+  if [ "$measured" != "$expected" ]; then
+    echo "$label checksum mismatch (pinned $expected, measured $measured)" >&2
+    rm -f "$tmp"
+    exit 1
+  fi
+  mv "$tmp" "$dest"
+  echo "$label checksum verified: $measured"
+}
 
 if [ ! -x "$TOOL" ]; then
   echo "== provisioning pinned appimagetool ($APPIMAGETOOL_TAG)"
   TOOLS="$ROOT/.toolchain/appimage"
   mkdir -p "$TOOLS"
-  curl -fL --retry 2 --max-time 180 -o "$TOOLS/appimagetool.AppImage" "$APPIMAGETOOL_URL"
-  measured="$(sha256sum "$TOOLS/appimagetool.AppImage" | cut -d' ' -f1)"
-  echo "appimagetool measured sha256: $measured"
-  published="$(curl -fL --retry 2 --max-time 60 -sS \
-    "https://api.github.com/repos/AppImage/appimagetool/releases/tags/${APPIMAGETOOL_TAG}" \
-    | grep -Eo '[0-9a-f]{64}[[:space:]]+\s*\(?.*appimagetool-x86_64\.AppImage|appimagetool-x86_64\.AppImage[^0-9a-f]+[0-9a-f]{64}' \
-    | grep -Eo '[0-9a-f]{64}' | head -1 || true)"
-  if [ -n "$published" ]; then
-    if [ "$published" != "$measured" ]; then
-      echo "appimagetool checksum mismatch (published $published, measured $measured)" >&2
-      exit 1
-    fi
-    echo "appimagetool checksum verified against the published release body"
-  else
-    echo "WARNING: no published checksum found for $APPIMAGETOOL_TAG; relying on the in-image" >&2
-    echo "         self-test as the functional gate. Measured hash recorded above." >&2
-  fi
+  fetch_verified "$APPIMAGETOOL_URL" "$TOOLS/appimagetool.AppImage" "$APPIMAGETOOL_SHA256" "appimagetool"
   chmod +x "$TOOLS/appimagetool.AppImage"
   (cd "$TOOLS" && ./appimagetool.AppImage --appimage-extract >/dev/null 2>&1)
   test -x "$TOOL" || { echo "appimagetool extraction failed" >&2; exit 1; }
@@ -68,27 +93,29 @@ rm -rf "$WORK"
 mkdir -p "$APPDIR/usr/bin" "$BUNDLE/site-packages" "$APPDIR/usr/share/applications" \
          "$APPDIR/usr/share/icons/hicolor/scalable/apps"
 
-echo "== staging CPython"
-is_elf() { [ "$(head -c4 "$1" 2>/dev/null | od -An -tx1 | tr -d ' \n')" = "7f454c46" ]; }
-command -v "python$PY_VER" >/dev/null 2>&1 || {
-  echo "python$PY_VER is not on PATH" >&2
-  exit 1
-}
-PYTHON_BIN="$(readlink -f "$(command -v python$PY_VER)")"
+echo "== staging pinned CPython ($CPYTHON_NAME)"
+CPYTHON_DIR="$ROOT/.toolchain/cpython"
+mkdir -p "$CPYTHON_DIR"
+if [ ! -f "$CPYTHON_DIR/$CPYTHON_NAME" ]; then
+  fetch_verified "$CPYTHON_URL" "$CPYTHON_DIR/$CPYTHON_NAME" "$CPYTHON_SHA256" "cpython"
+else
+  verify_sha256 "$CPYTHON_DIR/$CPYTHON_NAME" "$CPYTHON_SHA256" "cpython"
+fi
+rm -rf "$CPYTHON_DIR/python"
+tar -xzf "$CPYTHON_DIR/$CPYTHON_NAME" -C "$CPYTHON_DIR"
+PYTHON_BIN="$(readlink -f "$CPYTHON_DIR/python/bin/python$PY_VER")"
 is_elf "$PYTHON_BIN" || {
-  echo "python$PY_VER resolves to $PYTHON_BIN, which is not an ELF executable." >&2
-  echo "Use a real CPython $PY_VER (or a relocatable python-build-standalone build)." >&2
+  echo "pinned python$PY_VER at $PYTHON_BIN is not an ELF executable" >&2
   exit 1
 }
 cp "$PYTHON_BIN" "$APPDIR/usr/bin/python$PY_VER"
 mkdir -p "$APPDIR/usr/lib"
-for lib in /usr/lib/x86_64-linux-gnu/libpython$PY_VER.so.1.0 /usr/lib/libpython$PY_VER.so.1.0 \
-           "/usr/lib/x86_64-linux-gnu/libpython$PY_VER.so"; do
-  if [ -f "$lib" ]; then cp "$lib" "$APPDIR/usr/lib/"; break; fi
-done
+cp -a "$CPYTHON_DIR/python/lib/libpython$PY_VER.so"* "$APPDIR/usr/lib/"
 test -e "$APPDIR/usr/lib/libpython$PY_VER.so.1.0" || {
-  echo "libpython$PY_VER not found; cannot bundle CPython" >&2; exit 1; }
-cp -a "/usr/lib/python$PY_VER/." "$BUNDLE/"
+  echo "libpython$PY_VER not found in the pinned CPython archive" >&2
+  exit 1
+}
+cp -a "$CPYTHON_DIR/python/lib/python$PY_VER/." "$BUNDLE/"
 rm -rf "$BUNDLE/site-packages" "$BUNDLE/dist-packages" "$BUNDLE/lib2to3" "$BUNDLE/test"
 mkdir -p "$BUNDLE/site-packages"
 

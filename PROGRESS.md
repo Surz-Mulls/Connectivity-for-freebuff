@@ -5,6 +5,30 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-15 — C3 pin appimagetool and CPython
+
+Parent: `7b9fe64bc2b3a72cba8c482f3e69713df1b85e6c`.
+
+C1 CI on that parent: [run 43712106056](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/43712106056).
+python success (the job log's pytest line is the suite of 95), android success,
+linux success (the non-ELF step ran, then the AppImage self-test passed),
+arch-makepkg success. Sync of `fdc9842` onto Grok was
+[run 43711905315](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/43711905315),
+also all four jobs success.
+
+This commit stops copying `python3.12` from `PATH`. The image gets
+python-build-standalone `cpython-3.12.16+20261110` (`c2f87d4b…c12e99`), and
+appimagetool 1.9.0 is pinned to `46fdd785…083d1` (measured here 2026-11-15;
+details in `docs/PINNED_TOOLING.md`). A mismatched download exits before the
+file is executed.
+
+Local, not CI: `bash scripts/tests/test_appimage_elf_guard.sh` and
+`bash scripts/tests/test_appimage_tool_pin.sh` both exited 0 after the builder
+exited 1 with the expected message. ShellCheck 0.10.0 `-x -S warning` was clean.
+The good-path image that contains this CPython is **implemented-unverified**
+until this commit's linux job is read. Interpreter GLIBC symbols stop at 2.17;
+PySide6's own libraries are not covered by that number.
+
 ## 2026-11-15 — C1 AppImage interpreter must be ELF
 
 Parent of this commit: `fdc98423cba77b1d457efd6fd99f67c2cd935823` (Grok fast-forwarded
