@@ -33,9 +33,11 @@ chmod +x continuity-linux-x86_64.AppImage
 ./continuity-linux-x86_64.AppImage               # terminal 2: Qt/QML client
 ```
 
-The AppImage was built and self-tested in the release workflow, and the same bytes are exercised on
-`ubuntu:22.04` and `archlinux:latest` by the `appimage-images` CI job. The measured whole-image
-floor is **glibc @GLIBC@**; older distributions are unsupported.
+The release-candidate AppImage is self-tested by the release verifier. A separate `ci` build of the
+same commit is exercised on `ubuntu:22.04` and `archlinux:latest` by the `appimage-images` job;
+`appimagetool` is not byte-reproducible, so those are not the same bytes, but they come from the
+same source and the same pinned interpreter/tool. The measured whole-image floor is **glibc
+@GLIBC@**; older distributions are unsupported.
 
 ## Corrections to older releases
 
