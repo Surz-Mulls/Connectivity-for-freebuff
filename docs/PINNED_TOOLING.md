@@ -19,11 +19,11 @@ whose SHA-256 does not match, and does that before unpacking, `chmod +x` or exec
 
 | | |
 |---|---|
-| Build | `11076708` |
+| Build | `11076708`, contents `Pkg.Revision=12.0` |
 | URL | `https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip` |
-| Size | 138733165 bytes |
-| SHA-256 | `177e20e12637e8e3ba2cbe5fe20b780c38c92bdd85a1633300bdc041e20b2036` |
-| Provenance | Measured from `dl.google.com` on 2026-11-16; the filename itself is the pinned build, not a floating version. |
+| Size | 153607504 bytes |
+| SHA-256 | `2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258` |
+| Provenance | Measured from `dl.google.com` on 2026-11-16; CI independently measured the same digest. The previous cached zip (10.0, 138733165 bytes) had digest `177e20e…`; Google rotated the `_latest` artifact, and the pinned build failed closed until this value was updated. |
 
 ## Gradle
 

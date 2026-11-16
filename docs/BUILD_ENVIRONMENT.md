@@ -30,7 +30,7 @@ Pinned downloads (verified before use):
 | `appimagetool-x86_64.AppImage` 1.9.0 (12632352 B) | `46fdd785094c7f6e545b61afcfb0f3d98d8eab243f644b4b17698c01d06083d1` |
 | `cpython-3.12.16+20261110-...-install_only.tar.gz` (68163679 B) | `c2f87d4b4e8db3abddb0f116c6ccfc503d0cbdbb9ee8faacddad1b679ec12e99` |
 | Temurin JDK `21.0.13+9` (207858352 B) | `d7f5d5cf865a2902b70ff549b97586a7d3f234e016f041ab447ea740c7d66d1c` |
-| Android command-line tools build 11076708 (138733165 B) | `177e20e12637e8e3ba2cbe5fe20b780c38c92bdd85a1633300bdc041e20b2036` |
+| Android command-line tools build 11076708, contents 12.0 (153607504 B) | `2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258` |
 | Gradle 8.11.1 distribution | `f397b287023acdba1e9f6fc5ea72d22dd63669d59ed4a289a29b1a76eee151c6` |
 
 A stale pre-pin `appimagetool` extraction was present in `.toolchain/appimage` at the start of this

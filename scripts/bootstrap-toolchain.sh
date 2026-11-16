@@ -19,7 +19,9 @@ JDK_SHA256="d7f5d5cf865a2902b70ff549b97586a7d3f234e016f041ab447ea740c7d66d1c"
 # Android command-line tools build 11076708 contains the versioned sdkmanager. This artifact is
 # what dl.google.com publishes for that build; pin its digest so a changed server response fails.
 CMDLINE_TOOLS="commandlinetools-linux-11076708_latest.zip"
-CMDLINE_TOOLS_SHA256="177e20e12637e8e3ba2cbe5fe20b780c38c92bdd85a1633300bdc041e20b2036"
+# Measured 2026-11-16: this build now contains command-line-tools 12.0 (153607504 bytes).
+# The earlier cached zip was 10.0 and has a different digest; CI caught the rotation.
+CMDLINE_TOOLS_SHA256="2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258"
 
 GRADLE_VERSION="8.11.1"
 GRADLE_SHA256="f397b287023acdba1e9f6fc5ea72d22dd63669d59ed4a289a29b1a76eee151c6"
