@@ -1,7 +1,7 @@
 artifact: dist/continuity-android-debug.apk
-built_utc: 2026-10-31T08:05:53Z
-size_bytes: 29277811
-sha256: 8287bb51754d382ba2dfea2b0cc559fb6440e43b0e96e101d188474aed857df4
+built_utc: 2026-11-16T08:55:07Z
+size_bytes: 29304243
+sha256: 4bac97855aa84a6f63700e4ecac0de12905d3932815839ff333cad0ec7e2f235
 package_id: dev.continuity.app
 version_name: 0.1.0
 version_code: 1

@@ -95,7 +95,7 @@ if [ "$(id -u)" -eq 0 ]; then
 fi
 
 pkgs=(base-devel git python python-virtualenv zstd curl
-      python-cryptography python-zeroconf python-qrcode python-dbus-next qt6-declarative)
+      python-cryptography python-zeroconf python-qrcode qt6-declarative)
 # Full upgrade, never a partial one: `pacman -Sy` alone is unsupported on Arch.
 sudo pacman -Syu --noconfirm --needed "${pkgs[@]}"
 

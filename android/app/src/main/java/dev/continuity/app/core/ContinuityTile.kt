@@ -1,6 +1,7 @@
 package dev.continuity.app.core
 
 import android.content.Intent
+import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import dev.continuity.app.MainActivity
@@ -20,11 +21,18 @@ class ContinuityTile : TileService() {
     override fun onClick() {
         val intent = Intent(this, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivityAndCollapse(
-            android.app.PendingIntent.getActivity(
-                this, 0, intent,
-                android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // API 34 replaced the Intent overload with a PendingIntent overload.
+            startActivityAndCollapse(
+                android.app.PendingIntent.getActivity(
+                    this, 0, intent,
+                    android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                )
             )
-        )
+        } else {
+            // The Intent overload is deprecated and throws when targeting Android 14+, so API 33
+            // opens the activity without collapsing the shade; the PendingIntent form is API 34+.
+            startActivity(intent)
+        }
     }
 }

@@ -1,5 +1,11 @@
 # Continuity v0.1.0-test.1 — pre-release
 
+> **Correction (2026-11-16): do not use this release's AppImage.** Its `usr/bin/python3.12` is a
+> wrapper that execs `/opt/freestyle/python/bin/python3` from the build host, so it is not
+> self-contained. Its Arch asset is a manual layout archive, not a `makepkg` package. The tag and
+> assets are unchanged for history; use a later verified pre-release instead. See
+> [`docs/RELEASE_CORRECTIONS.md`](RELEASE_CORRECTIONS.md).
+
 Local-first Android ↔ Linux companion. No account, no cloud, no relay: devices find each other on
 the LAN, pair by comparing a 6-digit code and four emoji, and pin each other's certificate
 fingerprint.

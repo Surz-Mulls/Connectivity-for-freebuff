@@ -17,7 +17,7 @@ the repository root). The research pack that the prompt references is preserved 
 
 | Component | Path | Status |
 |---|---|---|
-| Daemon (protocol, pairing, clipboard, files, notifications, diagnostics, DeX supervision) | `daemon/` | implemented, 82 automated tests passing (protocol v2) |
+| Daemon (protocol, pairing, clipboard, files, notifications, diagnostics, DeX supervision) | `daemon/` | implemented, 97 automated tests passing (protocol v2) |
 | Wire protocol specification v2 | `protocol/PROTOCOL.md` | normative |
 | Local IPC: Unix socket + loopback HTTP bridge, schema | `daemon/continuityd/ipc.py`, `docs/ipc-schema.md` | implemented + tested |
 | CLI (`continuityd`, `continuityctl`) | `daemon/continuityd/cli.py` | implemented |
@@ -35,7 +35,7 @@ Test matrix: **[`docs/batch-test-matrix.md`](docs/batch-test-matrix.md)**.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e daemon[dev]        # cryptography, zeroconf, qrcode, dbus-next
+.venv/bin/pip install -e daemon[dev]        # cryptography, zeroconf, qrcode
 .venv/bin/continuityd run                   # foreground daemon; writes IPC socket + state
 ```
 
@@ -83,6 +83,9 @@ user-initiated; the app never toggles developer settings or app-ops through ADB.
   ceiling, privacy settings are the grant. A peer can never change this device's privacy policy.
 * No arbitrary shell execution, no unauthenticated ADB, no world-writable device nodes, no silent
   camera/mic/screen activation. DeX is opt-in and drives allowlisted `scrcpy`/`adb` argv only.
+* mDNS discovery is unauthenticated and therefore advisory. The TXT record omits the certificate
+  fingerprint by default (`discovery_broadcast_fingerprint`); enabling it only changes what is
+  advertised, never what is trusted.
 
 Details: `protocol/PROTOCOL.md` §1, §6, §9 and `docs/feature-matrix.md` (security section).
 
@@ -113,10 +116,14 @@ cd daemon && ../.venv/bin/python -m pytest -q
 ./scripts/build-android.sh
 ```
 
-`scripts/build-android.sh` downloads a JDK 21 and the Android command-line tools into
-`.toolchain/` (gitignored) if they are missing, then runs the Gradle build and copies the APK plus a
-SHA-256 checksum into `artifacts/android/`. It never touches system directories and never writes a
-signing key.
+`scripts/build-android.sh` downloads a pinned JDK 21 and the pinned Android command-line tools into
+`.toolchain/` (gitignored) if they are missing, verifies their SHA-256, then runs the Gradle build
+and copies the APK plus a SHA-256 checksum into `artifacts/android/`. It never touches system
+directories and never writes a signing key.
+
+The AppImage requires **glibc 2.34 or newer** (Ubuntu 22.04+, Debian 12+, current Arch). That is the
+whole-image floor measured across every bundled ELF, not just the interpreter; the builder fails if
+a rebuild needs more. It bundles CPython 3.12 and PySide6/Qt 6.
 
 ## Known limitations (honest)
 

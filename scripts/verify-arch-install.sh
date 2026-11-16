@@ -20,7 +20,7 @@ continuityd --help >/dev/null
 continuityctl paths --json | python3 -c \
   'import json,sys; d=json.load(sys.stdin); assert {"api_config","runtime_dir","ipc"} <= d.keys()'
 
-pacman -Q python python-cryptography python-zeroconf python-qrcode python-dbus-next qt6-declarative >/dev/null
+pacman -Q python python-cryptography python-zeroconf python-qrcode qt6-declarative >/dev/null
 
 qml_bin=""
 for c in qml6 qml /usr/lib/qt6/bin/qml; do

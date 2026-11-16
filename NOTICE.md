@@ -40,7 +40,6 @@ reproduced unmodified in `docs/research/`.
 | cryptography | Apache-2.0 OR BSD-3-Clause | daemon identity, signatures, SAS |
 | zeroconf (python-zeroconf) | LGPL-2.1 | daemon mDNS discovery |
 | qrcode | BSD-3-Clause | pairing QR generation |
-| dbus-next | MIT | optional D-Bus export (installed; see limitations) |
 | AndroidX / Jetpack Compose / Material 3 | Apache-2.0 | Android app |
 | Bouncy Castle (bcpkix-jdk18on) | MIT | Android certificate generation |
 | Kotlin stdlib / kotlinx-coroutines | Apache-2.0 | Android app |

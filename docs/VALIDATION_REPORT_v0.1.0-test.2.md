@@ -1,5 +1,10 @@
 # Validation report — v0.1.0-test.2
 
+> **Correction (2026-11-16):** the test.2 AppImage is defective (it execs a build-host
+> `/opt/freestyle/python/bin/python3`) and its Arch asset is a manual layout archive. This report is
+> kept as history and is not a recommendation. See
+> [`docs/RELEASE_CORRECTIONS.md`](RELEASE_CORRECTIONS.md).
+
 Repo `Surz-Mulls/Connectivity-for-freebuff`. The published pre-release is
 [v0.1.0-test.2](https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.2)
 (`prerelease=true`, `draft=false`, published `2026-11-05T06:20:42Z`). The tag

@@ -12,6 +12,9 @@ cd "$ROOT"
 
 PY_VER="3.12"
 PYSIDE="6.12.0"
+# Whole-image minimum, measured across every bundled ELF (not just the interpreter).
+# docs/PINNED_TOOLING.md and README.md must state the same value.
+GLIBC_FLOOR="2.34"
 APPIMAGETOOL_TAG="1.9.0"
 APPIMAGETOOL_URL="https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_TAG}/appimagetool-x86_64.AppImage"
 # Measured 2026-11-15 from the URL above. Size 12632352. The asset's own text identifies a
@@ -48,7 +51,7 @@ if [ ! -x "$ROOT/.venv/bin/pip" ]; then
   USE_DEV_VENV=0
   echo "== provisioning a build venv from a clean checkout"
   [ -x "$VENV/bin/pip" ] || python3 -m venv "$VENV"
-  "$VENV/bin/pip" install --quiet --disable-pip-version-check cryptography zeroconf qrcode dbus-next
+  "$VENV/bin/pip" install --quiet --disable-pip-version-check cryptography zeroconf qrcode
 fi
 PIP="$( [ "$USE_DEV_VENV" = 1 ] && echo "$ROOT/.venv/bin/pip" || echo "$VENV/bin/pip" )"
 PY="$( [ "$USE_DEV_VENV" = 1 ] && echo "$ROOT/.venv/bin/python" || echo "$VENV/bin/python" )"
@@ -79,12 +82,18 @@ fetch_verified() {
   echo "$label checksum verified: $measured"
 }
 
-if [ ! -x "$TOOL" ]; then
+TOOLS="$ROOT/.toolchain/appimage"
+mkdir -p "$TOOLS"
+if [ ! -f "$TOOLS/appimagetool.AppImage" ]; then
   echo "== provisioning pinned appimagetool ($APPIMAGETOOL_TAG)"
-  TOOLS="$ROOT/.toolchain/appimage"
-  mkdir -p "$TOOLS"
   fetch_verified "$APPIMAGETOOL_URL" "$TOOLS/appimagetool.AppImage" "$APPIMAGETOOL_SHA256" "appimagetool"
+fi
+# Verify the cached archive every time. A pre-extracted AppRun from an older download is not proof
+# that the pinned tool is the one being used.
+verify_sha256 "$TOOLS/appimagetool.AppImage" "$APPIMAGETOOL_SHA256" "appimagetool"
+if [ ! -x "$TOOL" ]; then
   chmod +x "$TOOLS/appimagetool.AppImage"
+  rm -rf "$TOOLS/squashfs-root"
   (cd "$TOOLS" && ./appimagetool.AppImage --appimage-extract >/dev/null 2>&1)
   test -x "$TOOL" || { echo "appimagetool extraction failed" >&2; exit 1; }
 fi
@@ -122,7 +131,7 @@ mkdir -p "$BUNDLE/site-packages"
 echo "== installing runtime dependencies into the image (PySide6 $PYSIDE)"
 "$PIP" install --quiet --disable-pip-version-check \
   --target "$BUNDLE/site-packages" \
-  "cryptography>=42" "zeroconf>=0.132" "qrcode>=7.4" "dbus-next>=0.2.3" "PySide6-Essentials==$PYSIDE"
+  "cryptography>=42" "zeroconf>=0.132" "qrcode>=7.4" "PySide6-Essentials==$PYSIDE"
 
 echo "== staging the application"
 cp -r daemon/continuityd "$BUNDLE/site-packages/continuityd"
@@ -222,4 +231,9 @@ echo "== building AppImage"
 ARCH=x86_64 "$TOOL" --no-appstream "$APPDIR" "$OUT"
 test -s "$OUT" || { echo "appimagetool produced no AppImage" >&2; exit 1; }
 chmod 0755 "$OUT"
-echo "appimage: $OUT ($(stat -c%s "$OUT") bytes)"
+
+# The interpreter's GLIBC symbols are not the image floor. Scan every bundled ELF and refuse to
+# produce an artifact that needs a newer glibc than the documented value.
+python3 scripts/check-appimage-glibc.py "$OUT" --floor "$GLIBC_FLOOR"
+
+echo "appimage: $OUT ($(stat -c%s "$OUT") bytes), glibc floor $GLIBC_FLOOR"

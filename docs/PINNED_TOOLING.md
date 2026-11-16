@@ -1,7 +1,38 @@
-# Pinned AppImage build tools
+# Pinned build tools
 
-Measured in this workspace on 2026-11-15. The builder refuses a file whose SHA-256
-does not match, and it does that before `chmod +x` or execution.
+Measured in this workspace on 2026-11-15 and 2026-11-16. Every builder refuses a file
+whose SHA-256 does not match, and does that before unpacking, `chmod +x` or execution.
+
+## Eclipse Temurin JDK
+
+`scripts/bootstrap-toolchain.sh` installs this under `.toolchain/jdk` without root.
+
+| | |
+|---|---|
+| Version | `21.0.13+9` (LTS) |
+| URL | `https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_linux_hotspot_21.0.13_9.tar.gz` |
+| Size | 207858352 bytes |
+| SHA-256 | `d7f5d5cf865a2902b70ff549b97586a7d3f234e016f041ab447ea740c7d66d1c` |
+| Provenance | Upstream `OpenJDK21U-jdk_x64_linux_hotspot_21.0.13_9.tar.gz.sha256.txt` matches the measured digest (2026-11-16). |
+
+## Android command-line tools
+
+| | |
+|---|---|
+| Build | `11076708` |
+| URL | `https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip` |
+| Size | 138733165 bytes |
+| SHA-256 | `177e20e12637e8e3ba2cbe5fe20b780c38c92bdd85a1633300bdc041e20b2036` |
+| Provenance | Measured from `dl.google.com` on 2026-11-16; the filename itself is the pinned build, not a floating version. |
+
+## Gradle
+
+| | |
+|---|---|
+| Version | `8.11.1` |
+| URL | `https://services.gradle.org/distributions/gradle-8.11.1-bin.zip` |
+| SHA-256 | `f397b287023acdba1e9f6fc5ea72d22dd63669d59ed4a289a29b1a76eee151c6` |
+| Provenance | Matches the upstream `.sha256` file, which the bootstrap script fetches and compares as well. |
 
 ## appimagetool
 
@@ -16,7 +47,8 @@ does not match, and it does that before `chmod +x` or execution.
 The GitHub release body does not publish a checksum for this asset. The tag is
 `1.9.0`; the file is a continuous build. The hash above is what this repo pins.
 A second download the same day matched it. It also matches the hash a reviewer
-recorded on 2026-11-07.
+recorded on 2026-11-07. The builder verifies the cached archive on every run; on
+2026-11-16 a stale pre-pin extraction was detected this way and replaced.
 
 ## CPython
 
@@ -36,5 +68,14 @@ machine.
 The SHA-256 matches the `SHA256SUMS` file in that GitHub release. The unpacked
 `python/bin/python3.12` is an ELF binary. `GLIBC_` symbols in that binary and in
 `libpython3.12.so.1.0` stop at **2.17**. That is the minimum glibc this interpreter
-was built for. It is not a promise about PySide6's Qt libraries; those come from
-the manylinux wheels pip downloads on the builder.
+was built for. It is *not* the image floor: PySide6's Qt libraries need newer symbols.
+
+## Whole-image glibc floor
+
+Measured on 2026-11-16 by `scripts/check-appimage-glibc.py` over **312 ELF files** in
+the built AppImage: the highest required symbol is **`GLIBC_2.34`**, set by
+`usr/lib/python3.12/site-packages/PySide6/Qt/lib/libQt6Core.so.6`. The documented
+floor in `scripts/build-appimage.sh` is `2.34`; the builder fails if any rebuild
+needs a higher version. Supported baseline: Ubuntu 22.04+, Debian 12+, current Arch.
+This is an environment test, not a clean-machine test; CI runs the same AppImage on
+`ubuntu:22.04` and `archlinux:latest` in the `appimage-images` job.

@@ -1,0 +1,168 @@
+name: release-candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (existing tags are refused)"
+        required: true
+        default: "v0.1.0-test.3"
+        type: string
+      confirm:
+        description: "Type the exact tag to publish; leave empty for a dry build"
+        required: false
+        default: ""
+        type: string
+      ci_run_id:
+        description: "Green 'ci' workflow run ID on this same commit (optional, recorded in docs)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Refuse to build an existing tag
+        run: |
+          if git ls-remote --tags origin "refs/tags/${{ inputs.tag }}" | grep -q .; then
+            echo "tag ${{ inputs.tag }} already exists; refusing to rebuild a published tag" >&2
+            exit 1
+          fi
+      - name: Install daemon and run Python tests
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e daemon pytest pytest-asyncio
+          python -m pytest daemon/tests -q
+      - name: Build Android APK and JVM tests
+        run: bash scripts/build-android.sh
+      - name: Install Linux packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            binutils ca-certificates curl desktop-file-utils file libfuse2t64 zstd
+          desktop-file-validate --version
+          file --version | head -1
+      - name: Build Linux deliverables and enforce the glibc floor
+        run: bash scripts/package-linux.sh
+      - name: Validate desktop entries
+        run: |
+          python3 scripts/validate-desktop-entries.py
+          desktop-file-validate packaging/continuity.desktop
+      - name: Build the makepkg Arch package in a clean Arch container
+        run: |
+          mkdir -p dist/makepkg
+          echo "candidate commit $(git rev-parse HEAD)"
+          docker run --rm -i -e CONTINUITY_PKGVER="${PKGVER}" -v "$PWD:/src" archlinux:latest bash -s <<'EOS'
+          set -euo pipefail
+          pacman -Syu --noconfirm --needed \
+            base-devel git sudo python python-cryptography python-zeroconf \
+            python-qrcode qt6-declarative
+          useradd -m builder
+          rm -rf /tmp/pkg
+          mkdir -p /tmp/pkg /src/dist/makepkg
+          bash /src/scripts/prepare-candidate-pkgbuild.sh /tmp/pkg
+          if grep -q 'refs/tags/v0.1.0-test.2' /tmp/pkg/PKGBUILD; then
+            echo "candidate PKGBUILD still points at the published tag" >&2
+            exit 1
+          fi
+          echo "---- generated recipe ----"
+          head -n 8 /tmp/pkg/PKGBUILD
+          grep -E '^pkgver=|^_srcdir_name=|^source=|^sha256sums=' /tmp/pkg/PKGBUILD
+          chown -R builder:builder /tmp/pkg
+          runuser -u builder -- env PACKAGER='Continuity maintainers <maintainers@continuity.invalid>' \
+            bash -lc 'cd /tmp/pkg && makepkg -sfC --noconfirm --nocheck'
+          mapfile -t built < <(find /tmp/pkg -maxdepth 1 -type f -name 'continuity-*.pkg.tar.zst' ! -name '*-debug-*' | sort)
+          test "${#built[@]}" -eq 1
+          case "${built[0]}" in
+            *continuity-linux-x86_64.pkg.tar.zst)
+              echo "refusing the manually assembled archive name" >&2
+              exit 1
+              ;;
+          esac
+          bash /src/scripts/verify-arch-package.sh "${built[0]}"
+          pacman -U --noconfirm "${built[0]}"
+          bash /src/scripts/verify-arch-install.sh
+          cp -v "${built[0]}" /src/dist/makepkg/
+          EOS
+        env:
+          PKGVER: "0.1.0.test3"
+      - name: Assemble, checksum, document and verify the candidate
+        run: |
+          python3 scripts/assemble-release.py \
+            --tag "${{ inputs.tag }}" \
+            --commit "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --ci-run "${{ inputs.ci_run_id }}" \
+            --glibc 2.34 \
+            --out "dist/release/${{ inputs.tag }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-candidate
+          path: dist/release/${{ inputs.tag }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: >-
+      needs.build.result == 'success' &&
+      inputs.confirm == inputs.tag &&
+      github.ref == 'refs/heads/Grok'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v7
+        with:
+          name: release-candidate
+          path: dist/release/${{ inputs.tag }}
+      - name: Install verifier tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends binutils zstd
+      - name: Verify the exact candidate bytes before publishing
+        run: >-
+          python3 tools/verify_release.py
+          --local "dist/release/${{ inputs.tag }}"
+          --expect-commit "$GITHUB_SHA"
+      - name: Refuse an existing tag or release
+        run: |
+          if git ls-remote --tags origin "refs/tags/${{ inputs.tag }}" | grep -q .; then
+            echo "tag ${{ inputs.tag }} already exists; refusing to replace it" >&2
+            exit 1
+          fi
+      - name: Publish the pre-release from the verified artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag }}"
+          dir="dist/release/$tag"
+          gh release create "$tag" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Continuity $tag — verified pre-release" \
+            --notes-file "$dir/RELEASE_NOTES_$tag.md" \
+            "$dir"/*
+          echo "published $tag from $GITHUB_SHA"
+      - name: Verify the published release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/verify_release.py "${{ inputs.tag }}"

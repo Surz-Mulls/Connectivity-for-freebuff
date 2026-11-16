@@ -1,8 +1,9 @@
 """mDNS advertisement and browsing for the ``_continuity._tcp`` service.
 
-Discovery is convenience, never trust: the TXT record carries the fingerprint only so the UI can
-show a friendly name before connecting. A peer is authenticated by the handshake pin regardless of
-what mDNS claimed.
+Discovery is convenience, never trust. The TXT record advertises a friendly name and platform so the
+UI can offer peers before connecting; the full certificate fingerprint is omitted unless
+``discovery_broadcast_fingerprint`` is enabled. A peer is authenticated by the handshake pin
+regardless of what mDNS claimed.
 """
 
 from __future__ import annotations
@@ -53,6 +54,18 @@ class Discovery:
         except OSError:
             return "127.0.0.1"
 
+    def txt_properties(self) -> dict[str, str]:
+        """TXT record fields. The fingerprint is opt-in because mDNS is unauthenticated."""
+        properties = {
+            "id": self.identity.device_id,
+            "name": self.identity.name,
+            "platform": "linux",
+            "proto": "1",
+        }
+        if self.settings.discovery_broadcast_fingerprint:
+            properties["fp"] = self.identity.fingerprint
+        return properties
+
     async def start(self, port: int) -> bool:
         if not self.settings.discovery_enabled:
             return False
@@ -63,13 +76,7 @@ class Discovery:
             log.warning("zeroconf not installed; discovery disabled")
             return False
         try:
-            properties = {
-                "id": self.identity.device_id,
-                "fp": self.identity.fingerprint,
-                "name": self.identity.name,
-                "platform": "linux",
-                "proto": "1",
-            }
+            properties = self.txt_properties()
             info = ServiceInfo(
                 SERVICE_TYPE,
                 f"{self.identity.name}.{SERVICE_TYPE}",

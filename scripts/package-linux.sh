@@ -131,7 +131,7 @@ rm -f "$tar_out"
 mkdir -p "$WORK/tarroot"
 rm -rf "$WORK/tarroot/$PORTABLE_NAME"
 cp -a "$STAGE" "$WORK/tarroot/$PORTABLE_NAME"
-zstd_tar "$WORK/tarroot/$PORTABLE_NAME" "$tar_out"
+zstd_tar "$WORK/tarroot" "$tar_out"
 echo "portable: $tar_out ($(stat -c%s "$tar_out") bytes)"
 
 # ------------------------------------------------------------------ Arch package
@@ -173,7 +173,7 @@ pkgver = $VERSION-1
 pkgdesc = Local-first Android/Linux continuity: pinned pairing, clipboard, files, notifications
 url = https://github.com/Surz-Mulls/Connectivity-for-freebuff
 builddate = $(date +%s)
-packager = FreeBuff <noreply@codebuff.com>
+packager = Continuity maintainers <maintainers@continuity.invalid>
 size = $installed_size
 arch = $ARCH
 license = GPL-3.0-only

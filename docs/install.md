@@ -20,7 +20,7 @@ State and secrets live in the user's XDG directories, never in the repository:
 |---|---|---|
 | `~/.config/continuity/identity/` | device certificate + private key | 0700 / key 0600 |
 | `~/.config/continuity/trusted-peers.json` | pinned peer fingerprints | 0600 |
-| `~/.config/continuity/settings.json` | privacy and feature settings | 0600 |
+| `~/.config/continuity/settings.json` | privacy and feature settings, including `discovery_broadcast_fingerprint` (default `false`) | 0600 |
 | `$XDG_RUNTIME_DIR/continuity/ipc.sock` | local API socket | 0600 |
 | `$XDG_RUNTIME_DIR/continuity/http.token` | loopback bridge port + bearer token | 0600 |
 | `~/.local/share/continuity/received/` | received files (0600) | 0700 |
@@ -40,6 +40,14 @@ WantedBy=default.target
 ```
 
 `systemctl --user enable --now continuity` is optional and not installed by any script.
+
+## Linux packages: AppImage glibc floor
+
+The AppImage is self-contained for Python and Qt, but it is not static: it requires **glibc 2.34 or
+newer** (Ubuntu 22.04+, Debian 12+, current Arch). The floor is measured across every bundled ELF
+file and enforced by the builder. It is not a promise for older distributions, and the defective
+`v0.1.0-test.1`/`v0.1.0-test.2` AppImages should not be used at all (see
+`docs/RELEASE_CORRECTIONS.md`).
 
 ## Desktop: Qt 6 QML UI
 
@@ -81,8 +89,11 @@ integrations/dolphin/uninstall.sh        # removes exactly that file
 integrations/browser-extension/install.sh   # registers the native-messaging host + prints the unpacked-extension path
 ```
 
-Load the printed directory via `chrome://extensions` → *Load unpacked*. The host binary is a small
-Python script that calls `continuityctl handoff <fingerprint> <url>`; it accepts only `http(s)`.
+Load the printed directory via `chrome://extensions` → *Load unpacked*. The installer derives the
+same deterministic extension ID Chromium assigns from the pinned key in `manifest.json` and writes
+it into every native-messaging manifest, so there is no ID to copy by hand. The host binary is a
+small Python script that calls `continuityctl handoff <fingerprint> <url>`; it accepts only
+`http(s)`.
 
 ## Android: build the APK
 
@@ -130,8 +141,11 @@ debugging toggle and a reboot — the app tells you, it does not toggle it.
 
 ## Firewall
 
-One TCP listener on port **47820** (or the first free port; the actual port is in `status`). Keep it
-LAN-only. Example nftables advice (you apply it):
+The daemon deliberately binds its TLS listener to **`0.0.0.0`** (all interfaces) on port **47820**
+(or the first free port; the actual port is in `status`), because a phone must be able to reach the
+laptop on the LAN. The local IPC HTTP bridge is separate and binds `127.0.0.1` only. Keep the TLS
+port LAN-only; if you do not want it reachable on a public interface, firewall it. Example nftables
+advice (you apply it):
 
 ```
 nft add rule inet filter input tcp dport 47820 ip saddr 192.168.0.0/16 accept

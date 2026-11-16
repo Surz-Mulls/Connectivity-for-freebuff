@@ -3,11 +3,20 @@
   "name": "Continuity — send tab to phone",
   "version": "0.1.0",
   "description": "Sends the current http(s) tab to your paired Android phone through the local Continuity daemon.",
-  "permissions": ["activeTab", "nativeMessaging", "contextMenus", "notifications", "tabs"],
-  "background": { "service_worker": "background.js" },
+  "permissions": [
+    "activeTab",
+    "nativeMessaging",
+    "contextMenus",
+    "notifications",
+    "tabs"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_title": "Send tab to phone",
     "default_popup": "popup.html"
   },
-  "icons": {}
+  "icons": {},
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoKmReV1Fu59W+omQgTP1X8HIGahjQQmRp7xFIP+tcuoDCJf6dvnRfBcJ0zXs8EkRZdr2mPT6lqxVMDNwsSy/emD3JmIJdCnn17Nox4IjjmTjITKxtL4qxtyfHTW7/AMENr2hTsENnR4lfbBfDe0BLOKk6kFUV5WtHQMIZzwtBirUNx6m/2fjssPZ1wjbUOS+gT1dtXQtF9AChBnho7UUDUPsRAngB0QWHdOxPHFKZn6m8o3rPV6b5rORZgzn8L+S94zIiGDsehSKifwhSleE6+9FRGwTg8Bvwo48Gsu+PTvdzJHUT1hQe6p1hpU96BefA5WKTsfrR4P9ZWstsfkD+QIDAQAB"
 }

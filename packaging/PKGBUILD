@@ -15,7 +15,7 @@ pkgdesc="Local-first Android/Linux continuity: pinned pairing, clipboard, files,
 arch=('x86_64')
 url="https://github.com/Surz-Mulls/Connectivity-for-freebuff"
 license=('GPL-3.0-only')
-depends=('python' 'python-cryptography' 'python-zeroconf' 'python-qrcode' 'python-dbus-next'
+depends=('python' 'python-cryptography' 'python-zeroconf' 'python-qrcode'
          'qt6-declarative')
 optdepends=('python-pyside6: alternative QML runtime instead of qt6-declarative')
 # Source is the immutable v0.1.0-test.2 tag archive (tag target 8db808a7).

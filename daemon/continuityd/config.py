@@ -88,6 +88,10 @@ class Settings:
     privacy_mode: bool = False
     paused_features: list[str] = field(default_factory=list)
     discovery_enabled: bool = True
+    # Off by default: mDNS is unauthenticated link-local broadcast. The TXT record still names the
+    # device and its platform, but the full certificate fingerprint is only advertised when the user
+    # opts in. Pairing never trusts mDNS in either case.
+    discovery_broadcast_fingerprint: bool = False
     # privileged integrations stay off until the user explicitly enables them
     adb_enabled: bool = False
     shizuku_enabled: bool = False
