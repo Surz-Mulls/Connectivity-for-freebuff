@@ -39,6 +39,10 @@ archive every run. The stale file was replaced with the pinned download, extract
 Linux artifact below was rebuilt with it. This is why the local AppImage hash differs from earlier
 runs in this workspace.
 
+> **These are local build hashes, not release hashes.** The published release was rebuilt by the
+> `release-candidate` workflow on a clean runner; its assets and digests are in
+> `docs/RELEASE_v0.1.0-test.3.md`. appimagetool and the APK debug signing are not byte-reproducible.
+
 ## Commands executed
 
 | # | Command | Exit | Result |

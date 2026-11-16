@@ -5,6 +5,33 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-16 — v0.1.0-test.3 published
+
+Tag `v0.1.0-test.3` -> `d9bad85b587f84a1c417815630561fbec2f8a901`; release
+[here](https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.3),
+pre-release, published `2026-11-16T09:46:25Z`. `main` remains `3ee3a9c3…`; test.1/test.2 tags and
+releases are unchanged. Full record: `docs/RELEASE_v0.1.0-test.3.md`.
+
+| Item | Status | Evidence |
+|---|---|---|
+| W1 real local builds | implemented-and-tested | 97 Python tests; Android 22 JVM tests + lint + APK; Linux portable/AppImage built from pinned tools; self-test and spaced path passed. Real Distrobox still blocked (no root/daemon) |
+| W2 glibc + other images | implemented-and-tested | floor 2.34 over 312 ELF files; builder fails above it; `appimage-images` on ubuntu:22.04 and archlinux:latest passed in run 43840044190 |
+| W3 release workflow | implemented-and-tested | dry build 43840458415; publish run 43841944574 build+publish success; manifest commit checked against tag |
+| W4 corrections/docs | implemented-and-tested | correction banners, unapplied old-release notice, generated notes/report; published report attached |
+| W5 extension ID | implemented-and-tested (installer) | pinned key -> `pocpmobopjgeddenbhlieogenkjfldjn`; no placeholder; browser runtime unverified |
+| W6 re-checks | implemented-and-tested | mDNS fingerprint off by default; neutral packager; unused `dbus-next` removed; 0.0.0.0 documented |
+| W7 toolchain pins | implemented-and-tested | JDK SHA pinned; Google rotated the cmdline-tools ZIP and CI failed closed; digest updated to `2d2d508…` and CI green |
+
+CI on the released commit: [43840044190](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/43840044190)
+(`python`, `android`, `linux`, `arch-makepkg`, `appimage-images` all success). Release run:
+[43841944574](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/43841944574)
+(build success in 4m24s, publish success in 1m5s). Published verifier: **0 FAIL, 0 WARN**.
+
+Arch package `continuity-0.1.0.test3-1-x86_64.pkg.tar.zst` (78,300 B,
+`43ab03e7…`) contains `.PKGINFO/.BUILDINFO/.MTREE`; `pacman -U` installed it and
+`verify-arch-install: ok (qml=qml6)`. AppImage is `ba5153b4…` (136,673,784 B, glibc 2.34); APK is
+`090297a4…` (29,202,779 B, debug-signed).
+
 ## 2026-11-15 — C3 pin appimagetool and CPython
 
 Parent: `7b9fe64bc2b3a72cba8c482f3e69713df1b85e6c`.

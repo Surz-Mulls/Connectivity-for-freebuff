@@ -1,54 +1,109 @@
 {
   "schema": "continuity.status/1",
-  "updated": "2026-11-15T12:10:00Z",
+  "updated": "2026-11-16T09:50:00Z",
   "project": "Connectivity for FreeBuff",
-  "stage": "repair",
-  "module": "v0.1.0-test.2 published; Grok work incorporated into FreeBuff; final candidate not released",
-  "state": "candidate",
+  "stage": "release",
+  "module": "v0.1.0-test.3 published from Grok; CI, release-candidate build and release verifier all passed",
+  "state": "published",
   "branch": "Grok",
-  "grok_handoff": {
-    "branch": "Grok",
-    "head_commit": "9f74b6add78c97f608127c819f6562a4081238f7",
-    "preserved": true,
-    "incorporated_by": "fast-forward: origin/FreeBuff 36c46a3efc09e828b320b576f6176cecdf098916 was a strict ancestor of origin/Grok, so no history was rewritten",
-    "ci_run": 42950428961,
-    "ci_result": "all four jobs succeeded (python, android, linux, arch-makepkg) on commit 9f74b6add78c97f608127c819f6562a4081238f7"
-  },
-  "base_branch_before_repair": "FreeBuff",
-  "base_commit_before_repair": "36c46a3efc09e828b320b576f6176cecdf098916",
-  "tag": "v0.1.0-test.2",
+  "head_commit": "d9bad85b587f84a1c417815630561fbec2f8a901",
+  "head_commit_role": "tag target and verified release commit; this STATUS update is a later docs-only commit",
+  "tag": "v0.1.0-test.3",
   "tag_published": true,
-  "tag_target_commit": "8db808a7c70513f545f1eb8656579911ce4c59b1",
-  "release_published_at": "2026-11-05T06:20:42Z",
-  "release_url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.2",
+  "tag_target_commit": "d9bad85b587f84a1c417815630561fbec2f8a901",
+  "release_published_at": "2026-11-16T09:46:25Z",
+  "release_url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.3",
   "release_prerelease": true,
   "release_draft": false,
+  "release_asset_count": 9,
   "main_modified": false,
-  "previous_release_untouched": {
-    "tag": "v0.1.0-test.1",
-    "commit": "8b1313371caa4b358dc63f34c85fc6cd7c1b1d3b",
-    "url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.1"
-  },
-  "published_asset_ledger": "docs/published-build-manifest-v0.1.0-test.2.json",
+  "main_commit": "3ee3a9c3a71bb5127e3773a40432bfd0767b94ab",
+  "previous_releases_untouched": [
+    {
+      "tag": "v0.1.0-test.1",
+      "commit": "8b1313371caa4b358dc63f34c85fc6cd7c1b1d3b",
+      "asset_count": 7,
+      "note": "tag, release and assets unchanged; AppImage is defective and its notes carry a correction in the repo, not on GitHub"
+    },
+    {
+      "tag": "v0.1.0-test.2",
+      "commit": "8db808a7c70513f545f1eb8656579911ce4c59b1",
+      "asset_count": 7,
+      "note": "tag, release and assets unchanged; AppImage is defective and no old asset was replaced"
+    }
+  ],
+  "release_record": "docs/RELEASE_v0.1.0-test.3.md",
+  "corrections": "docs/RELEASE_CORRECTIONS.md",
+  "user_validation": "docs/USER_VALIDATION.md",
   "tests": {
-    "python_local": "95 passed with (cd daemon && ../.venv/bin/python -m pytest -q) on the FreeBuff takeover tree; the CI python job on the final run 42955481424 also succeeded.",
-    "android_local": "22 @Test methods in tree; testDebugUnitTest re-executed with --rerun-tasks and assembleDebug were BUILD SUCCESSFUL locally, and the CI android job on run 42955481424 succeeded.",
-    "desktop_entries": "implemented-and-tested: desktop-file-validate 0.28 accepts packaging/continuity.desktop; scripts/validate-desktop-entries.py checks the freedesktop rules for application entries and the KDE service-menu rules for integrations/dolphin/continuity-send.desktop.",
-    "shellcheck": "implemented-and-tested: ShellCheck 0.10.0 -x -S warning clean for the seven scripts the CI step lists, including scripts/build-arch-distrobox.sh and scripts/tests/test_build_arch_distrobox.sh.",
-    "distrobox_wrapper": "implemented-and-tested (mocked): scripts/tests/test_build_arch_distrobox.sh, 29 assertions, run locally and inside the linux job of CI run 42955481424. Real Distrobox integration is implemented-unverified: this cloud VM has no distrobox/podman daemon access.",
-    "makepkg": "implemented-and-tested in CI run 42950428961 on 9f74b6add78c97f608127c819f6562a4081238f7 (arch-makepkg job success). Earlier run 42949932184 on 6cbbf4123b0d8e942caf21d8ad6af0ca1d7444ba also built continuity-0.1.0.test2-1-x86_64.pkg.tar.zst with .PKGINFO, .BUILDINFO and .MTREE from a git archive of that commit, not the v0.1.0-test.2 tag. Run 42949083052 was a false green (docker stdin) and 42949506073 died before makepkg (dubious ownership).",
-    "python_historical_local": "95 passed on the pre-release pass, via cd daemon && pytest. That invocation hid the tests package import bug.",
-    "android_jvm_historical": "22 JVM tests in tree (17 earlier + 5 ReconnectPolicyTest). The android job on run 41979767326 succeeded; the Grok CI run 42950428961 also succeeded.",
-    "ci_on_tag": "failed \u2014 https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/41979767326 (python import, linux desktop-file-validate). android succeeded.",
-    "hardware": "not device-tested in this repair; see docs/VALIDATION_REPORT_v0.1.0-test.2.md section 6"
+    "ci": "All five jobs succeeded on d9bad85b587f84a1c417815630561fbec2f8a901 in run 43840044190: python, android, linux, arch-makepkg and the new appimage-images job.",
+    "python": "97 passed locally (`.venv/bin/python -m pytest daemon/tests -q`) and the CI python job succeeded.",
+    "android": "22 JVM tests, lintDebug and assembleDebug succeeded locally and in CI; APK is debug-signed. The Quick Settings tile now uses startActivity on API 33 instead of the API-34-only/startActivityAndCollapse path.",
+    "appimage": "Built with pinned appimagetool 1.9.0 and python-build-standalone CPython 3.12.16; in-image --self-test passed on the published AppImage; appimage-images passed on ubuntu:22.04 and archlinux:latest in run 43840044190 (separate build, same commit/source; appimagetool is not byte-reproducible).",
+    "glibc": "Whole-image floor measured at 2.34 across 312 ELF files (worst PySide6/Qt libQt6Core.so.6); scripts/build-appimage.sh fails if a rebuild needs more.",
+    "makepkg": "Run 43841944574 built continuity-0.1.0.test3-1-x86_64.pkg.tar.zst with makepkg in archlinux:latest, verified .PKGINFO/.BUILDINFO/.MTREE, installed it with pacman -U and ran verify-arch-install: ok (qml=qml6).",
+    "release_verifier": "tools/verify_release.py --local on the candidate: 0 FAIL, 0 WARN. The same verifier against the published tag: 0 FAIL, 0 WARN.",
+    "desktop": "validate-desktop-entries.py and desktop-file-validate accepted the application entry; the KDE service entry passed its own rules.",
+    "browser_extension": "Pinned key derives deterministic ID pocpmobopjgeddenbhlieogenkjfldjn; installer test writes that ID to all four native-messaging manifests with no placeholder. Browser runtime remains implemented-unverified.",
+    "distrobox": "Mocked wrapper suite: 29 assertions, 0 failed. Real distrobox/podman remains implemented-unverified because this VM has no root and no container daemon access.",
+    "docs": "Release notes and report were generated from run 43841944574 and attached to the release; published SHA256SUMS and manifest were independently downloaded and verified."
   },
-  "artifacts": {
-    "published_apk_sha256": "3c4f37cf0f2f71f535cf832237f519ddd547b325c161a61f63f539528ad48406",
-    "published_appimage_sha256": "91de5e553cceeab78091ac4235e3ea06bf589bc2ef121e60f69ff9a39f8775f4",
-    "published_manual_arch_archive_sha256": "8b4248b2e4db42a3c30167a1daeabc3f21d8af914b43f673ed85594b29dc24cd",
-    "published_portable_sha256": "57a89e3eb1579c40c61a907685bc84e89b677aa319a1fd34e0d2ba841845269c",
-    "published_arch_is_makepkg": false,
-    "makepkg_pkgbuild_source_sha256": "aa817ab138cca16efecb15f59def0cfe59845fad852c0e989b015f69ed1e3698"
+  "published_assets": {
+    "continuity-android-debug.apk": {
+      "size": 29202779,
+      "sha256": "090297a4aed5779479a66b7762d1b8ef58b83748c86d3829e9a408b15a0605b2",
+      "signing": "debug"
+    },
+    "continuity-linux-x86_64.AppImage": {
+      "size": 136673784,
+      "sha256": "ba5153b44d7fc9b24370d377d6757fe43bfc0e6cde406bd4b0a14e7d56a5baca",
+      "glibc_floor": "2.34"
+    },
+    "continuity-0.1.0.test3-1-x86_64.pkg.tar.zst": {
+      "size": 78300,
+      "sha256": "43ab03e787e0443a29d83152c86240955e8417dc7f62a686b245f19d85a97ecd",
+      "type": "makepkg"
+    },
+    "continuity-linux-x86_64-portable.tar.zst": {
+      "size": 153595,
+      "sha256": "aad64defbf399fc41433d7c39b8e9bf0268f4075224dff08b033a60f6f113f84"
+    },
+    "continuity.desktop": {
+      "size": 208,
+      "sha256": "c77eb75d8a3138a4730920fc2271c57b5821f075ce5929f1307fee4193480914"
+    },
+    "BUILD-MANIFEST.json": {
+      "size": 1745,
+      "sha256": "077799c47a426b91bc451e3c966286932783d72e477d047ae3599734ee4da16f",
+      "commit": "d9bad85b587f84a1c417815630561fbec2f8a901"
+    },
+    "SHA256SUMS": {
+      "size": 780,
+      "sha256": "c1650e4f1b8f18f4cadc60759b3cd71fd9213838ac6793a727cb5a8cc4208bbf"
+    }
+  },
+  "runs": {
+    "branch_ci": {
+      "run": 43840044190,
+      "commit": "d9bad85b587f84a1c417815630561fbec2f8a901",
+      "result": "success: python, android, linux, arch-makepkg, appimage-images",
+      "url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/43840044190"
+    },
+    "release_candidate_dry_build": {
+      "run": 43840458415,
+      "commit": "d9bad85b587f84a1c417815630561fbec2f8a901",
+      "result": "build success; publish skipped"
+    },
+    "release_candidate_publish": {
+      "run": 43841944574,
+      "commit": "d9bad85b587f84a1c417815630561fbec2f8a901",
+      "result": "build success; publish success; published-release verifier 0 FAIL/0 WARN",
+      "url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/43841944574"
+    },
+    "earlier_ci": [
+      43838947940,
+      43837376614
+    ]
   },
   "hardware": {
     "B01_pair": "implemented-unverified",
@@ -62,26 +117,27 @@
     "notification_reply_and_dismissal": "implemented-unverified",
     "quickshell_hyprland": "implemented-unverified",
     "dolphin_hyprland": "implemented-unverified",
-    "appimage_launch_arch_path_with_spaces": "not-run-on-arch",
+    "appimage_launch_arch_path_with_spaces": "implemented-unverified on Arch; Ubuntu CI and local extract-and-run passed",
     "kde_connect_remote_input_baseline": "blocked",
     "dex_journeys": "implemented-unverified",
-    "dex_native_desktop_mode_android_15": "not-implemented"
+    "dex_native_desktop_mode_android_15": "not-implemented",
+    "real_distrobox": "implemented-unverified"
   },
   "needs_user": [
-    "Do not retag or re-upload v0.1.0-test.2. Its Linux hashes differ from the pre-upload report because those three files were rebuilt at publish time; SHA256SUMS matches the published bytes.",
-    "Approve a new candidate (proposed v0.1.0-test.3) only if you want a release whose CI is green and whose Arch asset is the makepkg package rather than the manual layout archive.",
-    "Mi 12 / HyperOS: install the debug APK and run journeys B01\u2013B07, including Wi-Fi toggle and sleep/wake. Notification reply and dismissal need the notification listener grant.",
-    "Arch + Hyprland: launch the AppImage from a path containing spaces; load integrations/quickshell and the Dolphin service menu; run docs/baseline-remote-input.md and record the evidence table.",
-    "DeX: with USB debugging already authorized, run journeys C01\u2013C04. Do not expect native desktop mode on this Android 15 device.",
-    "Optional real Distrobox integration: on a machine with distrobox+podman, run scripts/build-arch-distrobox.sh and scripts/verify-arch-install.sh; the wrapper tests here are mocked."
+    "Run docs/USER_VALIDATION.md on the Mi 12 and Hyprland laptop; the release is explicitly not device-tested.",
+    "Use only v0.1.0-test.3 or later. The test.1/test.2 AppImages are defective and their Arch assets are manual layout archives.",
+    "The draft correction notice for the two old GitHub releases is in docs/RELEASE_CORRECTIONS.md and was deliberately not applied.",
+    "Real Distrobox/podman remains unverified here; a machine with those tools can run scripts/build-arch-distrobox.sh and verify-arch-install.sh."
   ],
-  "docs_head_note": "STATUS.json before the Grok repair said tag_published false and pointed release_url at v0.1.0-test.1 while PROGRESS.md already said v0.1.0-test.2 was published. Both now describe the same tag target, the same published hashes, and the same hardware limits.",
-  "final_validation": {
-    "branch": "FreeBuff",
-    "commit": "2bb8a85194f8092a68df043d31451416ed3e5af2",
-    "run": 42955481424,
-    "run_url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/42955481424",
-    "result": "success \u2014 python, android, linux and arch-makepkg all succeeded",
-    "note": "docs-only commits after this commit do not change build artifacts"
+  "release_gate_summary": {
+    "exact_commit_ci_green": true,
+    "release_candidate_build_manifest_commit_matches": true,
+    "verifier_no_fail_candidate": true,
+    "verifier_no_fail_published": true,
+    "arch_is_makepkg_and_installed": true,
+    "base_image_job_green": true,
+    "old_releases_untouched": true,
+    "main_untouched": true,
+    "new_pre_release": "v0.1.0-test.3"
   }
 }
