@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Register the native-messaging host for Chromium-family browsers (user scope only).
+# Register the native-messaging host for Chromium-family browsers and Firefox/Zen (user scope).
 # Idempotent: safe to re-run after native host updates (manifest syntax verified with bash -n in CI).
 #
-# The extension ID is not guessed and not left as a placeholder. manifest.json pins a public key;
-# Chromium derives the extension ID from SHA-256 of that key. The same derivation is applied here
-# so allowed_origins always names the ID Chromium will assign to this unpacked extension.
+# Chromium: manifest.json pins a public key; Chromium derives the extension ID from SHA-256 of that
+# key. The same derivation is applied here so allowed_origins names the ID Chromium will assign.
+# Firefox/Zen: the ID is the declared browser_specific_settings.gecko.id, and Firefox requires the
+# native host manifest to use allowed_extensions instead of allowed_origins. The Chromium key
+# derivation is deliberately not reused for the Firefox manifest.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOST_NAME="dev.continuity.handoff"
@@ -12,6 +14,7 @@ HOST_DIR="$HOME/.local/share/continuity/native-host"
 HOST_SCRIPT="$HOST_DIR/continuity_native.py"
 WRAPPER="$HOST_DIR/continuity-native-host"
 MANIFEST="$HERE/manifest.json"
+FIREFOX_DIR="$HOME/.mozilla/native-messaging-hosts"
 
 command -v python3 >/dev/null 2>&1 || {
   echo "python3 is required to derive the pinned extension ID." >&2
@@ -50,6 +53,25 @@ case "$EXTENSION_ID" in
     exit 1
     ;;
 esac
+
+GECKO_ID="$(
+  python3 - "$MANIFEST" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+try:
+    manifest = json.loads(open(path, encoding="utf-8").read())
+except (OSError, json.JSONDecodeError) as exc:
+    raise SystemExit(f"cannot read {path}: {exc}")
+gecko_id = str(
+    manifest.get("browser_specific_settings", {}).get("gecko", {}).get("id", "")
+).strip()
+if not gecko_id or "@" not in gecko_id:
+    raise SystemExit("manifest.json has no pinned browser_specific_settings.gecko.id")
+print(gecko_id)
+PY
+)"
 
 mkdir -p "$HOST_DIR"
 install -m 0755 "$HERE/native-host/continuity_native.py" "$HOST_SCRIPT"
@@ -91,12 +113,34 @@ PY
   written=$((written + 1))
 done
 
-echo "native host installed in $written browser profile(s): $WRAPPER"
+# Firefox/Zen speaks the same stdio protocol but uses a different allow-list key and the declared
+# Gecko ID. Never put the Chromium key-derived ID in this manifest.
+mkdir -p "$FIREFOX_DIR"
+python3 - "$FIREFOX_DIR/$HOST_NAME.json" "$HOST_NAME" "$WRAPPER" "$GECKO_ID" <<'PY'
+import json
+import sys
+
+path, name, wrapper, gecko_id = sys.argv[1:]
+payload = {
+    "name": name,
+    "description": "Continuity tab handoff",
+    "path": wrapper,
+    "type": "stdio",
+    "allowed_extensions": [gecko_id],
+}
+with open(path, "w", encoding="utf-8") as fh:
+    json.dump(payload, fh, indent=2)
+    fh.write("\n")
+PY
+
+echo "native host installed: $WRAPPER"
+echo "Chromium-family manifests: $written profile(s); extension ID: $EXTENSION_ID"
+echo "Firefox/Zen manifest: $FIREFOX_DIR/$HOST_NAME.json; allowed extension: $GECKO_ID"
 echo "extension directory: $HERE"
-echo "pinned extension ID: $EXTENSION_ID"
 echo
-echo "1. chrome://extensions -> Developer mode -> Load unpacked -> $HERE"
-echo "2. the native-messaging manifests already allow chrome-extension://$EXTENSION_ID/"
-echo "3. reload the extension. The host is refused unless the ID matches."
+echo "Chromium: chrome://extensions -> Developer mode -> Load unpacked -> $HERE"
+echo "Firefox/Zen: about:debugging#/runtime/this-firefox -> This Firefox ->"
+echo "  Load Temporary Add-on -> select $HERE/manifest.json"
+echo "Chromium reloads the extension to pick up this host; the host is refused unless the ID matches."
 echo
 echo "Uninstall: $HERE/uninstall.sh"

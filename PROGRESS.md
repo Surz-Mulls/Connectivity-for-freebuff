@@ -5,6 +5,23 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-21 — Firefox/Zen native messaging (fix 4)
+
+`manifest.json` declares the pinned Gecko ID `dev.continuity.handoff@continuity.local` under
+`browser_specific_settings.gecko`. `install.sh` writes the Firefox/Zen host manifest to
+`$HOME/.mozilla/native-messaging-hosts/dev.continuity.handoff.json` with
+`allowed_extensions: [that ID]`; it deliberately does not reuse the Chromium key-derived ID or
+`allowed_origins`. The Chromium-family manifests are unchanged. `uninstall.sh` removes the Firefox
+manifest as well as the four Chromium manifests and the helper. The README documents the
+`about:debugging` temporary-add-on path and notes that Firefox MV3 may use an event page instead of
+the Chromium service worker.
+
+Evidence: `python3 scripts/tests/test_browser_extension_install.py` -> **pass** (Firefox
+`allowed_extensions` exact, Chromium allow-list unchanged, no key-derived ID in the Firefox file,
+uninstall removes both); ShellCheck `-x -S warning` clean on install/uninstall; manifest JSON valid.
+No Firefox/Zen browser session was available: native-messaging registration is tested, the browser
+runtime remains **implemented-unverified**.
+
 ## 2026-11-21 — Structured desktop target, IPv6-safe (fix 3)
 
 `Store` now persists `last_desktop_host` and `last_desktop_port` separately and exposes

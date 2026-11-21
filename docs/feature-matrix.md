@@ -65,7 +65,7 @@ Nothing below is marked passing because it compiled.
 | Feature | Status | Evidence / note |
 |---|---|---|
 | URL handoff (desktop→phone, phone→desktop) | implemented-and-tested (validation) / unverified delivery | only http(s); receiver confirmation |
-| Browser tab handoff extension | implemented-unverified | MV3 + native-messaging host in `integrations/browser-extension/` |
+| Browser tab handoff extension | implemented-unverified | MV3 + native-messaging host in `integrations/browser-extension/`. Chromium-family manifests use the key-derived ID; Firefox/Zen uses a separate `allowed_extensions` manifest with the pinned Gecko ID `dev.continuity.handoff@continuity.local`. Installer/uninstaller tested; no browser or phone session, and Firefox MV3 event-page behavior is unverified. |
 | Find phone / ring desktop / ping | implemented-unverified | daemon + APK wiring; no device test |
 | Device status + battery over the wire | implemented-unverified | `status.battery` capability |
 | Phone camera capture / document scan | **not-implemented** | explicit `capability.denied` |
