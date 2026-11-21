@@ -173,9 +173,9 @@ fun ContinuityScreen(store: Store) {
 @Composable
 private fun ConnectionTab(status: JSONObject, pairing: JSONObject?, store: Store,
                           onStart: (String?, String, Int, String?) -> Unit) {
-    var host by remember { mutableStateOf(store.lastDesktop?.substringBefore(":") ?: "") }
+    var host by remember { mutableStateOf(store.lastDesktopHost ?: "") }
     var port by remember {
-        mutableStateOf(store.lastDesktop?.substringAfter(":", "47820") ?: "47820")
+        mutableStateOf(store.lastDesktopPort?.toString() ?: "47820")
     }
     var fingerprint by remember { mutableStateOf(store.expectedFingerprint() ?: "") }
     val device = status.optJSONObject("device")

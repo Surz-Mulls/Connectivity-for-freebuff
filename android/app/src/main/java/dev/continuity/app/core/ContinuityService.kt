@@ -206,7 +206,7 @@ class ContinuityService : Service() {
                 scheduleReconnect("connect failed: ${exc.message}")
                 return@launch
             }
-            store.lastDesktop = "$host:$port"
+            store.rememberDesktop(host, port)
             attach(socket, initiator = true)
         }
     }
@@ -220,9 +220,8 @@ class ContinuityService : Service() {
     /** A trusted session that ended on its own comes back with bounded backoff and jitter. */
     private fun scheduleReconnect(reason: String) {
         if (!running.get()) return
-        val target = store.lastDesktop ?: return
-        val host = target.substringBeforeLast(":")
-        val port = target.substringAfterLast(":").toIntOrNull() ?: return
+        val host = store.lastDesktopHost ?: return
+        val port = store.lastDesktopPort ?: return
         // Pinned identity required; a revoked peer is never silently re-paired or re-trusted.
         val fingerprint = store.expectedFingerprintValue ?: return
         if (store.isRevoked(fingerprint)) return

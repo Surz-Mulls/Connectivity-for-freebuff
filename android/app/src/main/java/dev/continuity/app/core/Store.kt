@@ -24,6 +24,50 @@ class PairingDecision(val request: JSONObject) {
     @Volatile var accepted = false
 }
 
+/**
+ * A remembered desktop endpoint. Host and port are stored separately so an IPv6 literal is never
+ * split on one of its own colons. [parse] exists only for the legacy combined string.
+ */
+data class DesktopTarget(val host: String, val port: Int) {
+    init {
+        require(host.isNotBlank()) { "host is blank" }
+        require(port in 1..65535) { "port out of range" }
+    }
+
+    companion object {
+        /**
+         * Parse the old `host:port` field defensively. Bracketed IPv6 is unambiguous; a bare IPv6
+         * literal is accepted with its last group as the port (the old writer always appended a
+         * port). New writes never use this parser because the fields are separate.
+         */
+        fun parse(value: String?): DesktopTarget? {
+            val text = value?.trim().orEmpty()
+            if (text.isEmpty()) return null
+            if (text.startsWith("[")) {
+                val close = text.indexOf(']')
+                if (close <= 1 || close + 1 >= text.length || text[close + 1] != ':') return null
+                return fromParts(text.substring(1, close), text.substring(close + 2).toIntOrNull())
+            }
+            val split = text.lastIndexOf(':')
+            if (split <= 0 || split == text.length - 1) return null
+            return fromParts(text.substring(0, split), text.substring(split + 1).toIntOrNull())
+        }
+
+        fun fromParts(host: String?, port: Int?): DesktopTarget? {
+            val cleaned = host?.trim().orEmpty()
+            if (cleaned.isEmpty() || port == null || port !in 1..65535) return null
+            // Brackets are display syntax; the socket wants the bare address.
+            val unbracketed = if (cleaned.startsWith("[") && cleaned.endsWith("]")) {
+                cleaned.substring(1, cleaned.length - 1)
+            } else {
+                cleaned
+            }
+            if (unbracketed.isBlank() || unbracketed.all { it == ':' }) return null
+            return DesktopTarget(unbracketed, port)
+        }
+    }
+}
+
 /** Settings + pinned fingerprints, stored in the app's private SharedPreferences. */
 class Store(context: Context) {
     private val prefs = context.getSharedPreferences("continuity", Context.MODE_PRIVATE)
@@ -73,9 +117,37 @@ class Store(context: Context) {
         get() = prefs.getString("expected_fingerprint", null)
         set(value) = prefs.edit().putString("expected_fingerprint", value).apply()
 
-    var lastDesktop: String?
-        get() = prefs.getString("last_desktop", null)
-        set(value) = prefs.edit().putString("last_desktop", value).apply()
+    /** Structured target; migrates the old combined `last_desktop` value once, on first read. */
+    val lastDesktopTarget: DesktopTarget?
+        get() {
+            if (prefs.contains("last_desktop_host") && prefs.contains("last_desktop_port")) {
+                return DesktopTarget.fromParts(
+                    prefs.getString("last_desktop_host", null),
+                    prefs.getInt("last_desktop_port", 0)
+                )
+            }
+            val legacy = prefs.getString("last_desktop", null) ?: return null
+            val parsed = DesktopTarget.parse(legacy) ?: return null
+            rememberDesktop(parsed.host, parsed.port)
+            return parsed
+        }
+
+    val lastDesktopHost: String?
+        get() = lastDesktopTarget?.host
+
+    val lastDesktopPort: Int?
+        get() = lastDesktopTarget?.port
+
+    fun rememberDesktop(host: String, port: Int) {
+        val target = requireNotNull(DesktopTarget.fromParts(host, port)) {
+            "invalid desktop endpoint"
+        }
+        prefs.edit()
+            .putString("last_desktop_host", target.host)
+            .putInt("last_desktop_port", target.port)
+            .remove("last_desktop")
+            .apply()
+    }
 
     fun expectedFingerprint(): String? = expectedFingerprintValue
 

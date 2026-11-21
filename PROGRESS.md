@@ -5,6 +5,21 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-21 — Structured desktop target, IPv6-safe (fix 3)
+
+`Store` now persists `last_desktop_host` and `last_desktop_port` separately and exposes
+`lastDesktopTarget`, `lastDesktopHost` and `lastDesktopPort`. `lastDesktopTarget` migrates the old
+combined `last_desktop` string once, writes the split fields and removes the old key. Reads fall
+back to the old string only when the split fields are absent. `ContinuityService` reconnects to the
+structured target instead of `substringBeforeLast(":")`, and the connection form reads the split
+fields. `DesktopTarget.parse` handles `[::1]:9`, bare `::1:9`, hostnames and IPv4; malformed values
+are refused rather than guessed, and brackets are stripped before the address reaches a socket.
+
+Evidence (JVM, no device): `./gradlew :app:testDebugUnitTest` -> **27 tests, 0 failures**,
+`BUILD SUCCESSFUL` in 28s. The store migration itself was not exercised through an Android
+`Context` (no Robolectric in this project); the pure parser and validation are unit-tested. Live
+IPv6 reconnect remains **implemented-unverified**; no phone or IPv6 peer was available.
+
 ## 2026-11-21 — Desktop reconnect re-arms on trusted rediscovery (fix 2)
 
 `DeviceManager.on_discovered_peers()` is wired to `Discovery.browse()` results. If a service
