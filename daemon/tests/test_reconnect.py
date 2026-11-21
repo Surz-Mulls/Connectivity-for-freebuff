@@ -101,6 +101,59 @@ async def test_reconnect_success_leaves_the_state_idle(tmp_path, monkeypatch):
     assert state.attempt == 0
 
 
+@pytest.mark.asyncio
+async def test_rediscovered_trusted_peer_rearms_exactly_one_loop(tmp_path, monkeypatch):
+    manager = _manager(tmp_path)
+    fingerprint = "f" * 64
+    exhausted = asyncio.create_task(asyncio.sleep(0))
+    await exhausted
+    state = ReconnectState(fingerprint=fingerprint, host="127.0.0.1", port=1,
+                           state="offline", attempt=manager.reconnect_policy.max_attempts,
+                           task=exhausted)
+    manager.reconnects[fingerprint] = state
+    started = []
+
+    async def fake_loop(state, reason):
+        started.append((state.fingerprint, reason))
+
+    monkeypatch.setattr(manager, "_reconnect_loop", fake_loop)
+    # Duplicate advertisements in one result set must still start only one loop.
+    manager.on_discovered_peers([{"fingerprint": fingerprint}, {"fingerprint": fingerprint}])
+    assert state.state == "backoff"
+    assert state.attempt == 0
+    assert state.task is not None and state.task is not exhausted
+    await asyncio.wait_for(state.task, 2)
+    assert started == [(fingerprint, "peer rediscovered")]
+
+
+@pytest.mark.asyncio
+async def test_rediscovered_untrusted_or_revoked_peer_does_nothing(tmp_path, monkeypatch):
+    manager = _manager(tmp_path)
+    fingerprint = "f" * 64
+    exhausted = asyncio.create_task(asyncio.sleep(0))
+    await exhausted
+    state = ReconnectState(fingerprint=fingerprint, host="127.0.0.1", port=1,
+                           state="offline", attempt=manager.reconnect_policy.max_attempts,
+                           task=exhausted)
+    manager.reconnects[fingerprint] = state
+    started = []
+
+    async def fake_loop(state, reason):
+        started.append(reason)
+
+    monkeypatch.setattr(manager, "_reconnect_loop", fake_loop)
+    manager.trust.peers.clear()
+    manager.on_discovered_peers([{"fingerprint": fingerprint}])
+    assert state.task is exhausted
+    assert state.state == "offline"
+
+    manager.trust.peers.append(TrustedPeer(fingerprint=fingerprint, device_id="d",
+                                           name="phone", paired_at="2020-01-01", revoked=True))
+    manager.on_discovered_peers([{"fingerprint": fingerprint}])
+    assert state.task is exhausted
+    assert started == []
+
+
 def test_public_state_never_leaks_internal_fields():
     state = ReconnectState(fingerprint="f" * 64, host="10.0.0.2", port=1716, name="phone")
     published = state.public()

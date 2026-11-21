@@ -5,6 +5,20 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-21 — Desktop reconnect re-arms on trusted rediscovery (fix 2)
+
+`DeviceManager.on_discovered_peers()` is wired to `Discovery.browse()` results. If a service
+advertises the opt-in `fp` and it matches a trusted, non-revoked peer whose reconnect state is
+`offline`/`idle` with no running task, one new bounded loop starts with attempt reset to 0. The
+loop connects only to the address remembered from the authenticated session; mDNS cannot replace
+that target. Untrusted/revoked peers, unknown peers and inbound-only sessions with no remembered
+target are ignored. `discovery_broadcast_fingerprint` remains opt-in and off by default, so an
+unidentified advertisement cannot re-arm anything.
+
+Evidence: `.venv/bin/python -m pytest daemon/tests/test_reconnect.py -q` -> **8 passed** (new
+trusted-rediscovery and untrusted/revoked tests). No real mDNS peer or network was available; the
+re-arm trigger itself is unit-tested, the live mDNS path remains **implemented-unverified**.
+
 ## 2026-11-21 — Android reconnect exhausts on TCP failure (fix 1)
 
 `ContinuityService.scheduleReconnect()` now reserves the next attempt through

@@ -157,7 +157,8 @@ class DeviceManager:
         self.notifications = NotificationService(settings, self.emit)
         self.transfers = TransferService(settings, self.emit, approver=self._approve_transfer)
         self.dex = DexService(settings, self.emit)
-        self.discovery = Discovery(identity, settings, self.emit)
+        self.discovery = Discovery(identity, settings, self.emit,
+                                   on_results=self.on_discovered_peers)
         self.diagnostics = DiagnosticsRunner(settings=settings, identity=identity, manager=self)
         self.sessions: dict[str, Session] = {}
         self.devices: dict[str, Device] = {}
@@ -343,6 +344,30 @@ class DeviceManager:
             return  # a loop is already running; do not stack reconnect attempts
         state.attempt, state.state = 0, "backoff"
         state.task = asyncio.create_task(self._reconnect_loop(state, reason))
+
+    def on_discovered_peers(self, peers: list[dict]) -> None:
+        """Re-arm an exhausted reconnect only for a trusted peer that reappears.
+
+        Discovery is advisory and its fingerprint field is opt-in, so this never falls back to a
+        name/device-id guess and never connects to an unknown or revoked peer. The target address
+        is the one the trusted session previously recorded; discovery is not allowed to replace
+        it with an unauthenticated mDNS address. Inbound-only peers have no remembered target and
+        are therefore left alone.
+        """
+        for peer in peers:
+            fingerprint = str(peer.get("fingerprint", "")).strip()
+            if not fingerprint or not self.trust.is_trusted(fingerprint):
+                continue
+            state = self.reconnects.get(fingerprint)
+            if state is None or not state.host or state.port <= 0:
+                continue
+            if state.state not in ("offline", "idle"):
+                continue
+            if state.task is not None and not state.task.done():
+                continue
+            if fingerprint in self.sessions:
+                continue
+            self.schedule_reconnect(fingerprint, "peer rediscovered")
 
     async def _reconnect_loop(self, state: ReconnectState, reason: str) -> None:
         try:

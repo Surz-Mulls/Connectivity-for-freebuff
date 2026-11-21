@@ -37,10 +37,12 @@ class DiscoveredPeer:
 class Discovery:
     """Wraps python-zeroconf; absent dependency degrades to manual pairing by address."""
 
-    def __init__(self, identity, settings, emit: Callable[[str, dict], None] | None = None):
+    def __init__(self, identity, settings, emit: Callable[[str, dict], None] | None = None,
+                 on_results: Callable[[list[dict]], None] | None = None):
         self.identity = identity
         self.settings = settings
         self.emit = emit or (lambda event, data: None)
+        self.on_results = on_results
         self.zeroconf = None
         self.service_info = None
         self.browser = None
@@ -130,8 +132,14 @@ class Discovery:
             await asyncio.sleep(timeout)
         finally:
             zc.close()
-        self.emit("discovery.results", {"peers": list(found.values())})
-        return list(found.values())
+        peers = list(found.values())
+        self.emit("discovery.results", {"peers": peers})
+        if self.on_results is not None:
+            try:
+                self.on_results(peers)
+            except Exception:  # noqa: BLE001 - discovery must never break the daemon
+                log.exception("discovery result callback failed")
+        return peers
 
     async def stop(self) -> None:
         azc = getattr(self, "_azc", None)
