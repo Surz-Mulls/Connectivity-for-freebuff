@@ -1,13 +1,13 @@
 {
   "schema": "continuity.status/1",
-  "updated": "2026-11-16T09:50:00Z",
+  "updated": "2026-11-21T08:10:00Z",
   "project": "Connectivity for FreeBuff",
-  "stage": "release",
-  "module": "v0.1.0-test.3 published from Grok; CI, release-candidate build and release verifier all passed",
-  "state": "published",
+  "stage": "post-release-hardening",
+  "module": "Five review fixes on Grok: Android reconnect exhaustion, desktop re-arm, IPv6-safe target storage, Firefox/Zen native messaging, release-tooling hardening",
+  "state": "implemented-and-tested (unit/CI); device and browser-session paths remain implemented-unverified",
   "branch": "Grok",
-  "head_commit": "d9bad85b587f84a1c417815630561fbec2f8a901",
-  "head_commit_role": "tag target and verified release commit; this STATUS update is a later docs-only commit",
+  "head_commit": "4c3d97c210f0c9e8017d8b7a32742eac831ec70d",
+  "head_commit_role": "final code/CI commit for the fix pass; the STATUS/PROGRESS record is a later docs-only commit",
   "tag": "v0.1.0-test.3",
   "tag_published": true,
   "tag_target_commit": "d9bad85b587f84a1c417815630561fbec2f8a901",
@@ -36,17 +36,14 @@
   "corrections": "docs/RELEASE_CORRECTIONS.md",
   "user_validation": "docs/USER_VALIDATION.md",
   "tests": {
-    "ci": "All five jobs succeeded on d9bad85b587f84a1c417815630561fbec2f8a901 in run 43840044190: python, android, linux, arch-makepkg and the new appimage-images job.",
-    "python": "97 passed locally (`.venv/bin/python -m pytest daemon/tests -q`) and the CI python job succeeded.",
-    "android": "22 JVM tests, lintDebug and assembleDebug succeeded locally and in CI; APK is debug-signed. The Quick Settings tile now uses startActivity on API 33 instead of the API-34-only/startActivityAndCollapse path.",
-    "appimage": "Built with pinned appimagetool 1.9.0 and python-build-standalone CPython 3.12.16; in-image --self-test passed on the published AppImage; appimage-images passed on ubuntu:22.04 and archlinux:latest in run 43840044190 (separate build, same commit/source; appimagetool is not byte-reproducible).",
-    "glibc": "Whole-image floor measured at 2.34 across 312 ELF files (worst PySide6/Qt libQt6Core.so.6); scripts/build-appimage.sh fails if a rebuild needs more.",
-    "makepkg": "Run 43841944574 built continuity-0.1.0.test3-1-x86_64.pkg.tar.zst with makepkg in archlinux:latest, verified .PKGINFO/.BUILDINFO/.MTREE, installed it with pacman -U and ran verify-arch-install: ok (qml=qml6).",
-    "release_verifier": "tools/verify_release.py --local on the candidate: 0 FAIL, 0 WARN. The same verifier against the published tag: 0 FAIL, 0 WARN.",
-    "desktop": "validate-desktop-entries.py and desktop-file-validate accepted the application entry; the KDE service entry passed its own rules.",
-    "browser_extension": "Pinned key derives deterministic ID pocpmobopjgeddenbhlieogenkjfldjn; installer test writes that ID to all four native-messaging manifests with no placeholder. Browser runtime remains implemented-unverified.",
-    "distrobox": "Mocked wrapper suite: 29 assertions, 0 failed. Real distrobox/podman remains implemented-unverified because this VM has no root and no container daemon access.",
-    "docs": "Release notes and report were generated from run 43841944574 and attached to the release; published SHA256SUMS and manifest were independently downloaded and verified."
+    "python": "99 passed (.venv/bin/python -m pytest daemon/tests -q); baseline was 97 before the two new reconnect tests.",
+    "android": "27 JVM tests, 0 failures; local lintDebug BUILD SUCCESSFUL in 36s; assembleDebug BUILD SUCCESSFUL in CI run 44881944727.",
+    "theme": ".venv/bin/python scripts/generate-theme.py --check -> no drift.",
+    "browser_extension": "scripts/tests/test_browser_extension_install.py -> pass: Chromium ID and Gecko ID manifests, Chromium allow-list unchanged, uninstall removes both.",
+    "release_tooling": "scripts/tests/test_verify_release.py and scripts/tests/test_check_appimage_glibc.py -> pass; tools/verify_release.py v0.1.0-test.3 -> 0 FAIL, 0 WARN against the published assets.",
+    "reconnect_dead_host": "Simulated desktop run -> reconnect.gave_up {'attempts': 3, 'last_error': 'ConnectionError: host unreachable'}, state offline, exactly 3 attempts.",
+    "ci": "Run 44881944727 on 4c3d97c: python, android, linux, arch-makepkg, appimage-images all success.",
+    "release_candidate_dry_build": "Run 44882179185 on 4c3d97c: build success, publish skipped; glibc 2.34, GLIBCXX 3.4.29, CXXABI 1.3.13, no OPENSSL_ symbols; verifier 0 FAIL/0 WARN; no tag/release v0.1.0-test.4 created."
   },
   "published_assets": {
     "continuity-android-debug.apk": {
@@ -84,26 +81,23 @@
   },
   "runs": {
     "branch_ci": {
-      "run": 43840044190,
-      "commit": "d9bad85b587f84a1c417815630561fbec2f8a901",
+      "run": 44881944727,
+      "commit": "4c3d97c210f0c9e8017d8b7a32742eac831ec70d",
       "result": "success: python, android, linux, arch-makepkg, appimage-images",
-      "url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/43840044190"
+      "url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/44881944727"
     },
     "release_candidate_dry_build": {
-      "run": 43840458415,
-      "commit": "d9bad85b587f84a1c417815630561fbec2f8a901",
-      "result": "build success; publish skipped"
+      "run": 44882179185,
+      "commit": "4c3d97c210f0c9e8017d8b7a32742eac831ec70d",
+      "result": "build success; publish skipped; no tag/release created",
+      "url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/44882179185"
     },
-    "release_candidate_publish": {
+    "released_v0.1.0_test3": {
       "run": 43841944574,
       "commit": "d9bad85b587f84a1c417815630561fbec2f8a901",
-      "result": "build success; publish success; published-release verifier 0 FAIL/0 WARN",
+      "result": "published pre-release; verifier 0 FAIL/0 WARN",
       "url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/43841944574"
-    },
-    "earlier_ci": [
-      43838947940,
-      43837376614
-    ]
+    }
   },
   "hardware": {
     "B01_pair": "implemented-unverified",
@@ -126,7 +120,9 @@
   "needs_user": [
     "Run docs/USER_VALIDATION.md on the Mi 12 and Hyprland laptop; the release is explicitly not device-tested.",
     "Use only v0.1.0-test.3 or later. The test.1/test.2 AppImages are defective and their Arch assets are manual layout archives.",
-    "The draft correction notice for the two old GitHub releases is in docs/RELEASE_CORRECTIONS.md and was deliberately not applied.",
+    "Firefox/Zen native-host registration is tested, but a real Firefox/Zen session is needed to confirm MV3 service-worker/event-page behavior.",
+    "Real Wi-Fi reconnection, IPv6 reconnect and the Android SharedPreferences migration need a device; the parser and policy logic are unit-tested.",
+    "The old-release correction notice in docs/RELEASE_CORRECTIONS.md was deliberately not applied.",
     "Real Distrobox/podman remains unverified here; a machine with those tools can run scripts/build-arch-distrobox.sh and verify-arch-install.sh."
   ],
   "release_gate_summary": {
@@ -138,6 +134,45 @@
     "base_image_job_green": true,
     "old_releases_untouched": true,
     "main_untouched": true,
-    "new_pre_release": "v0.1.0-test.3"
+    "new_pre_release": "v0.1.0-test.3",
+    "post_release_fixes_ci_green": true,
+    "post_release_fixes_release_candidate_dry_build": true
+  },
+  "fixes": {
+    "fix1_android_reconnect": {
+      "commit": "e6d125d",
+      "status": "implemented-and-tested (JVM)",
+      "detail": "ReconnectPolicy.reserveAttempt reserves every scheduled retry; TCP failures stop at maxAttempts. 23 JVM tests at the time, 0 failures.",
+      "unverified": "Real Wi-Fi/sleep-wake reconnect; no phone."
+    },
+    "fix2_desktop_rearm": {
+      "commit": "acf45cb",
+      "status": "implemented-and-tested (unit)",
+      "detail": "Trusted peer with an opt-in mDNS fingerprint re-arms exactly one bounded loop; untrusted/revoked and inbound-only peers ignored. 8 reconnect tests pass; dead-host test asserts reconnect.gave_up with attempts=3.",
+      "unverified": "Live mDNS peer; no second host."
+    },
+    "fix3_structured_target": {
+      "commit": "5398956",
+      "status": "implemented-and-tested (parser/JVM)",
+      "detail": "lastDesktopHost/lastDesktopPort with one-time legacy migration; IPv6-safe parsing. 27 JVM tests, 0 failures.",
+      "unverified": "Store migration through an Android Context (no Robolectric); live IPv6 reconnect."
+    },
+    "fix4_firefox_native_messaging": {
+      "commit": "62ee975",
+      "status": "implemented-and-tested (installer)",
+      "detail": "Pinned Gecko ID; Firefox manifest uses allowed_extensions; Chromium manifests unchanged; uninstall removes both. Installer test and ShellCheck pass.",
+      "unverified": "Firefox/Zen browser runtime and MV3 event-page behavior."
+    },
+    "fix5_release_tooling": {
+      "commit": "6b9db5b",
+      "status": "implemented-and-tested",
+      "detail": "Single tag resolution, safe asset names, all reports scanned, four symbol families enforced. Real v0.1.0-test.3 verifier 0 FAIL/0 WARN. 99 Python tests pass.",
+      "unverified": "A fresh local AppImage rebuild was not run; CI built the dry candidate and reported glibc 2.34/GLIBCXX 3.4.29/CXXABI 1.3.13/no OPENSSL."
+    },
+    "workflow_trigger": {
+      "commit": "4c3d97c",
+      "status": "implemented-and-tested",
+      "detail": "Release-candidate is dispatch-only again; dry build 44882179185 succeeded with publish skipped."
+    }
   }
 }

@@ -5,6 +5,26 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-21 — Post-release fix pass verification
+
+Branch `Grok`, code head `4c3d97c210f0c9e8017d8b7a32742eac831ec70d`. CI run
+[44881944727](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/44881944727)
+on that commit: `python`, `android`, `linux`, `arch-makepkg` and `appimage-images` all **success**.
+Dispatch-only release-candidate dry build
+[44882179185](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/44882179185):
+build **success**, publish **skipped**, candidate verifier **0 FAIL/0 WARN**. No tag or release
+`v0.1.0-test.4` was created; `v0.1.0-test.3` remains at `d9bad85…`, and `main` remains
+`3ee3a9c3…`.
+
+Local evidence after all five fixes: daemon **99 passed**; Android **27 JVM tests, 0 failures**,
+`lintDebug` and `assembleDebug` successful; theme drift check clean; browser-extension installer
+test pass; `tools/verify_release.py v0.1.0-test.3` **0 FAIL/0 WARN** against the published assets;
+simulated dead-host loop emitted `reconnect.gave_up` with `attempts=3` and stopped `offline`.
+
+Not verified: real phone Wi-Fi/IPv6 reconnect, the Android `SharedPreferences` migration through a
+real `Context`, a live Firefox/Zen session, and a real mDNS peer. These are recorded as
+`implemented-unverified` in `STATUS.json`; no hardware claim is made.
+
 ## 2026-11-21 — Release verifier and symbol-floor hardening (fix 5)
 
 `tools/verify_release.py` resolves the tag once in `main()` and passes the SHA into
