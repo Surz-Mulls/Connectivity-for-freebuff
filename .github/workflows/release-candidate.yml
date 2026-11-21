@@ -1,14 +1,9 @@
 name: release-candidate
 
 on:
-  # workflow_dispatch is the publication gate. This narrow push trigger only registers the workflow
-  # and runs the build job as a dry run; the publish job below rejects every non-dispatch event.
-  push:
-    branches: [Grok]
-    paths:
-      - ".github/workflows/release-candidate.yml"
-      - "scripts/assemble-release.py"
-      - "tools/verify_release.py"
+  # Dispatch-only: a dry build uses confirm="" and a tag that does not exist; publication requires
+  # the exact tag in confirm. The temporary push trigger used to register the workflow was removed
+  # because it re-ran the build against the already-published default tag and failed closed.
   workflow_dispatch:
     inputs:
       tag:
