@@ -70,12 +70,22 @@ The SHA-256 matches the `SHA256SUMS` file in that GitHub release. The unpacked
 `libpython3.12.so.1.0` stop at **2.17**. That is the minimum glibc this interpreter
 was built for. It is *not* the image floor: PySide6's Qt libraries need newer symbols.
 
-## Whole-image glibc floor
+## Whole-image runtime symbol floors
 
-Measured on 2026-11-16 by `scripts/check-appimage-glibc.py` over **312 ELF files** in
-the built AppImage: the highest required symbol is **`GLIBC_2.34`**, set by
-`usr/lib/python3.12/site-packages/PySide6/Qt/lib/libQt6Core.so.6`. The documented
-floor in `scripts/build-appimage.sh` is `2.34`; the builder fails if any rebuild
-needs a higher version. Supported baseline: Ubuntu 22.04+, Debian 12+, current Arch.
+Measured on 2026-11-21 by `scripts/check-appimage-glibc.py` against the published
+`v0.1.0-test.3` AppImage over **312 ELF files**. The scanner now measures all four
+families; the builder passes and enforces the same constants:
+
+| Family | Measured highest | Documented floor | Worst file |
+|---|---|---|---|
+| `GLIBC_` | **2.34** | 2.34 | `PySide6/Qt/lib/libQt6Core.so.6` |
+| `GLIBCXX_` | **3.4.29** | 3.4.29 | `PySide6/Qt/lib/libQt6Core.so.6` |
+| `CXXABI_` | **1.3.13** | 1.3.13 | `PySide6/Qt/lib/libQt6Concurrent.so.6` |
+| `OPENSSL_` | not present | 3.0.0 if one appears | — |
+
+The documented floors are `GLIBC_FLOOR=2.34`, `GLIBCXX_FLOOR=3.4.29`,
+`CXXABI_FLOOR=1.3.13` and `OPENSSL_FLOOR=3.0.0` in `scripts/build-appimage.sh`;
+the builder fails if any family exceeds its floor. Supported baseline remains Ubuntu
+22.04+, Debian 12+, current Arch (glibc 2.34+ and libstdc++ with GLIBCXX 3.4.29).
 This is an environment test, not a clean-machine test; CI runs the same AppImage on
 `ubuntu:22.04` and `archlinux:latest` in the `appimage-images` job.

@@ -105,8 +105,12 @@ jobs:
           python3 -m py_compile \
             tools/verify_release.py \
             scripts/assemble-release.py \
-            scripts/check-appimage-glibc.py
+            scripts/check-appimage-glibc.py \
+            scripts/tests/test_verify_release.py \
+            scripts/tests/test_check_appimage_glibc.py
           python3 tools/verify_release.py --help >/dev/null
+          python3 scripts/tests/test_verify_release.py
+          python3 scripts/tests/test_check_appimage_glibc.py
       - name: Distrobox wrapper tests (mocked; no containers)
         run: bash scripts/tests/test_build_arch_distrobox.sh
       - name: AppImage rejects a non-ELF interpreter

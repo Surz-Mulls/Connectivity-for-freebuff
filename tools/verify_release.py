@@ -124,6 +124,16 @@ def tag_commit(tag: str, report: Report) -> str | None:
         return None
 
 
+def safe_asset_name(name: str) -> str | None:
+    """Return a plain file name, or None for a path/name that must never be joined to a directory."""
+    if not name or name in {".", ".."} or "/" in name or "\\" in name or "\x00" in name:
+        return None
+    candidate = pathlib.PurePosixPath(name)
+    if candidate.name != name or ".." in candidate.parts:
+        return None
+    return name
+
+
 def download_release(tag: str, target: pathlib.Path, report: Report) -> bool:
     try:
         release = api_json(f"{API}/repos/{REPO}/releases/tags/{tag}")
@@ -136,7 +146,11 @@ def download_release(tag: str, target: pathlib.Path, report: Report) -> bool:
         return False
     report.ok("release exists", f"{tag}: {len(assets)} assets")
     for asset in assets:
-        name = asset["name"]
+        raw_name = str(asset.get("name", ""))
+        name = safe_asset_name(raw_name)
+        if name is None:
+            report.fail("download", f"unsafe asset name {raw_name!r}")
+            return False
         destination = target / name
         try:
             download(asset["browser_download_url"], destination)
@@ -163,7 +177,11 @@ def parse_sums(path: pathlib.Path, report: Report) -> dict[str, str]:
         if len(parts) != 2 or not re.fullmatch(r"[a-f0-9]{64}", parts[0]):
             report.fail("SHA256SUMS syntax", f"line {number}: {line!r}")
             continue
-        entries[parts[1].lstrip("*")] = parts[0]
+        name = safe_asset_name(parts[1].lstrip("*"))
+        if name is None:
+            report.fail("SHA256SUMS syntax", f"line {number}: unsafe asset name {parts[1]!r}")
+            continue
+        entries[name] = parts[0]
     if not entries:
         report.fail("SHA256SUMS syntax", "no entries")
     return entries
@@ -197,7 +215,7 @@ def check_sums(directory: pathlib.Path, report: Report) -> tuple[dict[str, str],
 
 
 def check_manifest(
-    directory: pathlib.Path, tag: str | None, expect_commit: str | None, report: Report
+    directory: pathlib.Path, expected_commit: str | None, report: Report
 ) -> None:
     path = directory / "BUILD-MANIFEST.json"
     if not path.is_file():
@@ -210,18 +228,19 @@ def check_manifest(
         return
     report.ok("BUILD-MANIFEST.json", f"{len(manifest.get('assets', []))} assets")
     commit = str(manifest.get("commit", ""))
-    expected = expect_commit
-    if tag and expected is None:
-        expected = tag_commit(tag, report)
-    if expected:
-        if commit == expected:
+    if expected_commit:
+        if commit == expected_commit:
             report.ok("manifest commit", commit)
         else:
-            report.fail("manifest commit", f"manifest {commit!r} != expected {expected!r}")
+            report.fail("manifest commit", f"manifest {commit!r} != expected {expected_commit!r}")
     else:
         report.skip("manifest commit", "no tag or --expect-commit supplied")
     for asset in manifest.get("assets", []):
-        name = str(asset.get("name", ""))
+        raw_name = str(asset.get("name", ""))
+        name = safe_asset_name(raw_name)
+        if name is None:
+            report.fail("manifest asset", f"unsafe name {raw_name!r}")
+            continue
         target = directory / name
         if not target.is_file():
             report.fail("manifest asset", f"{name} missing")
@@ -421,21 +440,28 @@ def check_report(directory: pathlib.Path, entries: dict[str, str], report: Repor
     if not reports:
         report.skip("validation report", "no report asset")
         return
-    quoted = {m.decode() for m in HEX64.findall(reports[0].read_bytes())}
     known = set(entries.values())
-    mismatched = sorted(quoted - known)
+    mismatched: list[tuple[str, str]] = []
+    quoted_count = 0
+    for path in reports:
+        quoted = {m.decode() for m in HEX64.findall(path.read_bytes())}
+        quoted_count += len(quoted)
+        mismatched.extend((path.name, digest) for digest in sorted(quoted - known))
     if mismatched:
-        report.warn("validation report hashes", f"{len(mismatched)} digest(s) not in SHA256SUMS")
+        first = ", ".join(f"{name}:{digest[:12]}" for name, digest in mismatched[:3])
+        report.warn("validation report hashes",
+                    f"{len(mismatched)} digest(s) in {len(reports)} report(s) not in SHA256SUMS ({first})")
     else:
-        report.ok("validation report hashes", "all quoted SHA-256 values match SHA256SUMS")
+        report.ok("validation report hashes",
+                  f"{len(reports)} report(s), {quoted_count} quoted SHA-256 value(s) match SHA256SUMS")
 
 
-def verify(directory: pathlib.Path, tag: str | None, expect_commit: str | None, report: Report) -> None:
+def verify(directory: pathlib.Path, expected_commit: str | None, report: Report) -> None:
     if not directory.is_dir():
         report.fail("candidate directory", f"missing {directory}")
         return
     entries, files = check_sums(directory, report)
-    check_manifest(directory, tag, expect_commit, report)
+    check_manifest(directory, expected_commit, report)
     appimage = find_one(files, r"\.AppImage$", "AppImage present", report)
     if appimage:
         check_appimage(appimage, report)
@@ -461,15 +487,16 @@ def main() -> int:
         parser.error("provide exactly one of TAG or --local DIR")
     report = Report()
     if args.local:
-        verify(args.local.resolve(), None, args.expect_commit, report)
+        verify(args.local.resolve(), args.expect_commit, report)
     else:
+        # Resolve exactly once: a second network lookup could disagree and produce a false FAIL.
         expected = tag_commit(args.tag, report)
         with tempfile.TemporaryDirectory(prefix=f"continuity-{args.tag}-") as tmp:
             target = pathlib.Path(tmp)
             if not download_release(args.tag, target, report):
                 print(f"FAIL: release {args.tag} could not be downloaded")
                 return 1
-            verify(target, args.tag, expected, report)
+            verify(target, expected, report)
     print(
         f"\n{report.failures} FAIL, {report.warnings} WARN"
         + ("" if report.failures == 0 else " — release must not be published")

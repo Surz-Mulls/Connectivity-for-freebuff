@@ -20,7 +20,7 @@ Built once by the `build` job; the `publish` job downloads those exact bytes and
 | Android debug APK | built by `:app:assembleDebug`; debug-signed; APK v2+ signature verified by the release verifier |
 | Linux packaging | `scripts/package-linux.sh`: AppImage, portable archive, desktop entry |
 | AppImage self-test | in-image `AppRun --self-test`, plus extraction/ELF/launcher checks by the verifier |
-| Whole-image glibc floor | measured across every bundled ELF; documented floor **@GLIBC@**; builder fails above it |
+| Whole-image runtime floors | measured across every bundled ELF; documented floors glibc **@GLIBC@**, GLIBCXX **3.4.29**, CXXABI **1.3.13**, OpenSSL 3.0.0 if present; builder fails above any |
 | Desktop entries | application entry via `desktop-file-validate` and the project validator; KDE service via the project validator |
 | Arch package | genuine `makepkg` build in an `archlinux:latest` container, metadata verified, `pacman -U` installed, post-install checks run |
 | Release verifier | `tools/verify_release.py --local ... --expect-commit @COMMIT@` (this job) |

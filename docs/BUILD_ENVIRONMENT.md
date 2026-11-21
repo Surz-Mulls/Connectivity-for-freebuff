@@ -50,7 +50,7 @@ runs in this workspace.
 | 1 | `.venv/bin/python -m pytest daemon/tests -q` | 0 | **97 passed** |
 | 2 | `bash scripts/build-android.sh` | 0 | 22 JVM tests (0 failures), `lintDebug` success, `assembleDebug` success; APK `4bac97855aa84a6f63700e4ecac0de12905d3932815839ff333cad0ec7e2f235` (29,304,243 B), debug-signed |
 | 3 | `bash scripts/package-linux.sh` | 0 | AppImage `af9fe4240c74cfd533d88dcbf971b52acc838472fb1af41fe17d953c7e0fc0f4` (136,681,976 B); portable `b4d38478e3a0f88ce8ba90e6cba8a79a3ae7eecdf18adc3f28f1c30645241ee8` (161,343 B, single top-level directory); manual layout archive `a5cc2d80366b44204cd8ee1cf684ea1c21896d042184c1c3c56001660c1e17f9` (160,200 B, **not makepkg**) |
-| 4 | `python3 scripts/check-appimage-glibc.py dist/continuity-linux-x86_64.AppImage --floor 2.34` (also invoked by the builder) | 0 | **glibc 2.34** across 312 ELF files; worst file `PySide6/Qt/lib/libQt6Core.so.6` |
+| 4 | `python3 scripts/check-appimage-glibc.py dist/continuity-linux-x86_64.AppImage --floor 2.34` (also invoked by the builder) | 0 | **glibc 2.34** across 312 ELF files; worst file `PySide6/Qt/lib/libQt6Core.so.6`. The expanded checker was later run against the published v0.1.0-test.3 image: glibc 2.34, GLIBCXX 3.4.29, CXXABI 1.3.13, no OPENSSL_ symbols |
 | 5 | `QT_QPA_PLATFORM=offscreen HOME=/tmp/cont-home-2 dist/continuity-linux-x86_64.AppImage --appimage-extract-and-run --self-test` | 0 | `self-test ok` on the final `af9fe…` build |
 | 6 | same AppImage copied to `/tmp/Continuity Path 2/Continuity.AppImage` and run with `--appimage-extract-and-run --self-test` | 0 | `self-test ok` (path with spaces) |
 | 7 | `python3 scripts/validate-desktop-entries.py` | 0 | application and KDE service entries valid |

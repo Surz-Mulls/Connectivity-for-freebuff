@@ -12,9 +12,12 @@ cd "$ROOT"
 
 PY_VER="3.12"
 PYSIDE="6.12.0"
-# Whole-image minimum, measured across every bundled ELF (not just the interpreter).
-# docs/PINNED_TOOLING.md and README.md must state the same value.
+# Whole-image minimums, measured across every bundled ELF (not just the interpreter).
+# docs/PINNED_TOOLING.md and README.md must state the same values.
 GLIBC_FLOOR="2.34"
+GLIBCXX_FLOOR="3.4.29"
+CXXABI_FLOOR="1.3.13"
+OPENSSL_FLOOR="3.0.0"   # no OPENSSL_ symbols are bundled today; enforced if one appears
 APPIMAGETOOL_TAG="1.9.0"
 APPIMAGETOOL_URL="https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_TAG}/appimagetool-x86_64.AppImage"
 # Measured 2026-11-15 from the URL above. Size 12632352. The asset's own text identifies a
@@ -234,6 +237,10 @@ chmod 0755 "$OUT"
 
 # The interpreter's GLIBC symbols are not the image floor. Scan every bundled ELF and refuse to
 # produce an artifact that needs a newer glibc than the documented value.
-python3 scripts/check-appimage-glibc.py "$OUT" --floor "$GLIBC_FLOOR"
+python3 scripts/check-appimage-glibc.py "$OUT" \
+  --floor "$GLIBC_FLOOR" \
+  --glibcxx-floor "$GLIBCXX_FLOOR" \
+  --cxxabi-floor "$CXXABI_FLOOR" \
+  --openssl-floor "$OPENSSL_FLOOR"
 
-echo "appimage: $OUT ($(stat -c%s "$OUT") bytes), glibc floor $GLIBC_FLOOR"
+echo "appimage: $OUT ($(stat -c%s "$OUT") bytes), floors glibc $GLIBC_FLOOR / GLIBCXX $GLIBCXX_FLOOR / CXXABI $CXXABI_FLOOR / OPENSSL $OPENSSL_FLOOR"

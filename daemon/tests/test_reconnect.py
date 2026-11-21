@@ -49,6 +49,8 @@ def _manager(tmp_path) -> DeviceManager:
 async def test_reconnect_loop_gives_up_after_bounded_attempts(tmp_path, monkeypatch):
     manager = _manager(tmp_path)
     attempts = []
+    events = []
+    manager.emit = lambda event, data=None: events.append((event, data))
 
     async def fake_connect(host, port, expected_fingerprint=None, timeout=15.0):
         attempts.append(1)
@@ -61,6 +63,11 @@ async def test_reconnect_loop_gives_up_after_bounded_attempts(tmp_path, monkeypa
     assert state.state == "offline"
     # bounded: exactly max_attempts connection attempts, then an explicit offline state
     assert len(attempts) == manager.reconnect_policy.max_attempts
+    assert events == [("reconnect.gave_up", {
+        "fingerprint": state.fingerprint,
+        "attempts": manager.reconnect_policy.max_attempts,
+        "last_error": state.last_error,
+    })]
 
 
 @pytest.mark.asyncio

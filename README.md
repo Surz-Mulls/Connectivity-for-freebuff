@@ -123,7 +123,9 @@ directories and never writes a signing key.
 
 The AppImage requires **glibc 2.34 or newer** (Ubuntu 22.04+, Debian 12+, current Arch). That is the
 whole-image floor measured across every bundled ELF, not just the interpreter; the builder fails if
-a rebuild needs more. It bundles CPython 3.12 and PySide6/Qt 6.
+a rebuild needs more. The bundled Qt libraries also require **GLIBCXX 3.4.29** and **CXXABI
+1.3.13**; no `OPENSSL_` versioned symbols are bundled today, but an OpenSSL 3.0.0 floor is enforced
+if one appears. It bundles CPython 3.12 and PySide6/Qt 6.
 
 ## Known limitations (honest)
 

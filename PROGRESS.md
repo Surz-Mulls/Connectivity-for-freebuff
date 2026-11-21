@@ -5,6 +5,28 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-21 — Release verifier and symbol-floor hardening (fix 5)
+
+`tools/verify_release.py` resolves the tag once in `main()` and passes the SHA into
+`check_manifest`; there is no second `tag_commit()` call. GitHub asset names, `SHA256SUMS`
+entries and manifest asset names are rejected if they contain `/`, `\\`, `..` or are not a plain
+file name, before any join onto the download directory. `check_report` now scans every
+`VALIDATION_REPORT_*.md`, not only the first.
+
+`scripts/check-appimage-glibc.py` now scans four version families and enforces four documented
+floors. Measured against the published `v0.1.0-test.3` image (312 ELF files): **GLIBC 2.34**,
+**GLIBCXX 3.4.29**, **CXXABI 1.3.13**, no `OPENSSL_` symbols. Constants in
+`scripts/build-appimage.sh`: `GLIBC_FLOOR=2.34`, `GLIBCXX_FLOOR=3.4.29`, `CXXABI_FLOOR=1.3.13`,
+`OPENSSL_FLOOR=3.0.0`; the builder passes all four. README, `docs/install.md`,
+`docs/PINNED_TOOLING.md` and the release-report template state the same floors.
+
+Evidence: `.venv/bin/python -m pytest daemon/tests -q` -> **99 passed**; new
+`scripts/tests/test_check_appimage_glibc.py` -> fixture `GLIBCXX_3.4.29` fails a 3.4.20 floor and
+passes 3.4.29; new `scripts/tests/test_verify_release.py` -> unsafe names rejected, both reports
+scanned, manifest commit checked; ShellCheck clean; `tools/verify_release.py v0.1.0-test.3` ->
+**0 FAIL, 0 WARN** against the existing release. The four-family scanner was run against the
+published image, not a fresh local build; a rebuild is left to CI.
+
 ## 2026-11-21 — Firefox/Zen native messaging (fix 4)
 
 `manifest.json` declares the pinned Gecko ID `dev.continuity.handoff@continuity.local` under
@@ -48,7 +70,8 @@ target are ignored. `discovery_broadcast_fingerprint` remains opt-in and off by 
 unidentified advertisement cannot re-arm anything.
 
 Evidence: `.venv/bin/python -m pytest daemon/tests/test_reconnect.py -q` -> **8 passed** (new
-trusted-rediscovery and untrusted/revoked tests). No real mDNS peer or network was available; the
+trusted-rediscovery and untrusted/revoked tests; the existing dead-host test now also asserts the
+emitted `reconnect.gave_up` event with `attempts=3`). No real mDNS peer or network was available; the
 re-arm trigger itself is unit-tested, the live mDNS path remains **implemented-unverified**.
 
 ## 2026-11-21 — Android reconnect exhausts on TCP failure (fix 1)

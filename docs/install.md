@@ -41,11 +41,13 @@ WantedBy=default.target
 
 `systemctl --user enable --now continuity` is optional and not installed by any script.
 
-## Linux packages: AppImage glibc floor
+## Linux packages: AppImage runtime floors
 
 The AppImage is self-contained for Python and Qt, but it is not static: it requires **glibc 2.34 or
-newer** (Ubuntu 22.04+, Debian 12+, current Arch). The floor is measured across every bundled ELF
-file and enforced by the builder. It is not a promise for older distributions, and the defective
+newer** (Ubuntu 22.04+, Debian 12+, current Arch), and the bundled Qt libraries require
+**GLIBCXX 3.4.29** and **CXXABI 1.3.13** from libstdc++. All floors are measured across every
+bundled ELF file and enforced by the builder; no `OPENSSL_` symbols are bundled today. This is not
+a promise for older distributions, and the defective
 `v0.1.0-test.1`/`v0.1.0-test.2` AppImages should not be used at all (see
 `docs/RELEASE_CORRECTIONS.md`).
 

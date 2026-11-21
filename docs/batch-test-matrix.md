@@ -46,6 +46,8 @@ Hyprland, no Qt). Hardware rows are marked blocked/not verified, never pass.
 | A29 | Desktop reconnect re-arm | `pytest daemon/tests/test_reconnect.py` | exhausted trusted peer rediscovered -> exactly one new loop; untrusted/revoked -> none | 8 passed | **pass** |
 | A30 | Android desktop target | `gradle :app:testDebugUnitTest` (`DesktopTargetTest`) | IPv6-safe legacy parsing; separate host/port validation | 27 JVM tests, 0 failures | **pass** |
 | A31 | Firefox/Zen native host | `python3 scripts/tests/test_browser_extension_install.py` | Firefox `allowed_extensions` exact; Chromium manifests unchanged; uninstall removes both | pass | **pass** |
+| A32 | Runtime symbol families | `python3 scripts/tests/test_check_appimage_glibc.py` | GLIBCXX_3.4.29 fixture fails a 3.4.20 floor; all four families parsed | pass | **pass** |
+| A33 | Release verifier hardening | `python3 scripts/tests/test_verify_release.py`; `tools/verify_release.py v0.1.0-test.3` | unsafe asset names rejected; every report scanned; real release 0 FAIL/0 WARN | pass | **pass** |
 
 ## B. Requires the phone (blocked here)
 
