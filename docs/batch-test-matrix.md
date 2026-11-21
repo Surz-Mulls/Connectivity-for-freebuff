@@ -42,6 +42,7 @@ Hyprland, no Qt). Hardware rows are marked blocked/not verified, never pass.
 | A25 | Diagnostics redaction | run + serialise | home path absent, JSON+MD written | pass | **pass** |
 | A26 | Theme drift | `generate-theme.py --check` | no drift | pass | **pass** |
 | A27 | Android build | `gradle :app:assembleDebug` | APK produced, debug-signed | see `docs/implementation-validation.md` | **pass/fail recorded there** |
+| A28 | Android reconnect budget | `gradle :app:testDebugUnitTest` (`ReconnectPolicyTest`) | scheduled retries reserve exactly `maxAttempts`, then stop | 23 JVM tests, 0 failures; new test reserves 1..10 then returns null | **pass** |
 
 ## B. Requires the phone (blocked here)
 

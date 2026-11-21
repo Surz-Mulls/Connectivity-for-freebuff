@@ -37,4 +37,16 @@ class ReconnectPolicy(
     }
 
     fun exhausted(attempt: Int): Boolean = attempt >= maxAttempts
+
+    /**
+     * Reserve the next attempt before it is scheduled. Returns null once the series is exhausted.
+     *
+     * Every retry path (a TCP connect failure as well as a session-level close) must consume an
+     * attempt here; otherwise an unreachable host would retry forever without ever reaching
+     * [maxAttempts]. A successful trusted session resets the caller's counter to zero.
+     */
+    fun reserveAttempt(attempt: Int): Int? {
+        require(attempt >= 0) { "attempt count cannot be negative" }
+        return if (exhausted(attempt)) null else attempt + 1
+    }
 }

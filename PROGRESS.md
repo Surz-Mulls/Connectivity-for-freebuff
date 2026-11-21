@@ -5,6 +5,20 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-21 — Android reconnect exhausts on TCP failure (fix 1)
+
+`ContinuityService.scheduleReconnect()` now reserves the next attempt through
+`ReconnectPolicy.reserveAttempt()` before scheduling it. The old code incremented only in
+`attach()`'s `onClosed`, so a host that refused TCP connections retried forever. The explicit
+user-initiated connect is not a retry; after it fails, retries 1..`maxAttempts` are attempted, then
+`reconnect gave up after 10 attempts` is logged and nothing is scheduled until a user action or a
+trusted session resets the counter.
+
+Evidence (JVM, no device): `./gradlew :app:testDebugUnitTest` -> **23 tests, 0 failures**,
+`BUILD SUCCESSFUL` in 2m21s. The new test reserves exactly `1..maxAttempts` and asserts the next
+reservation is null. Real Wi-Fi/sleep-wake reconnect remains **implemented-unverified**; no phone
+was available.
+
 ## 2026-11-16 — v0.1.0-test.3 published
 
 Tag `v0.1.0-test.3` -> `d9bad85b587f84a1c417815630561fbec2f8a901`; release

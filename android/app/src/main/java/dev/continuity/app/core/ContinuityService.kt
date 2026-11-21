@@ -226,13 +226,15 @@ class ContinuityService : Service() {
         // Pinned identity required; a revoked peer is never silently re-paired or re-trusted.
         val fingerprint = store.expectedFingerprintValue ?: return
         if (store.isRevoked(fingerprint)) return
-        if (reconnectPolicy.exhausted(reconnectAttempts)) {
+        // Reserve the attempt before scheduling. The old code incremented only in attach()'s
+        // onClosed, so a TCP connect failure retried forever without ever exhausting the budget.
+        val attempt = reconnectPolicy.reserveAttempt(reconnectAttempts) ?: run {
             note("reconnect gave up after $reconnectAttempts attempts — $reason")
             return
         }
+        reconnectAttempts = attempt
         cancelReconnect()
-        val delay = reconnectPolicy.withinJitter(reconnectPolicy.delayFor(reconnectAttempts + 1))
-        val attempt = reconnectAttempts + 1
+        val delay = reconnectPolicy.withinJitter(reconnectPolicy.delayFor(attempt))
         reconnectJob = scope.launch {
             kotlinx.coroutines.delay(delay)
             if (!running.get() || store.isRevoked(fingerprint)) return@launch
@@ -256,7 +258,8 @@ class ContinuityService : Service() {
                 AppState.status.value = statusJson(port = serverSocket?.localPort ?: 0)
                 note(failure?.let { "session closed: $it" } ?: "session closed")
                 if (initiator) {
-                    reconnectAttempts += 1
+                    // scheduleReconnect reserves the attempt; incrementing here as well would
+                    // consume two attempts for one closed session.
                     scheduleReconnect(failure ?: "session closed")
                 }
             }

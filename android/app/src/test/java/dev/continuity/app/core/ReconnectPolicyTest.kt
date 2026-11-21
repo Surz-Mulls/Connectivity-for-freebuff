@@ -2,6 +2,7 @@ package dev.continuity.app.core
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -23,6 +24,22 @@ class ReconnectPolicyTest {
     }
 
     @Test
+    fun `consecutive connect failures reserve exactly maxAttempts`() {
+        // Models the service path for an unreachable host: each scheduled retry reserves one
+        // attempt before connect() is called. The initial user-initiated connect is not a retry.
+        var attempts = 0
+        val reserved = mutableListOf<Int>()
+        while (true) {
+            val next = policy.reserveAttempt(attempts) ?: break
+            attempts = next
+            reserved += next
+        }
+        assertEquals((1..policy.maxAttempts).toList(), reserved)
+        assertEquals(policy.maxAttempts, attempts)
+        assertNull(policy.reserveAttempt(attempts))
+    }
+
+    @Test
     fun `jitter stays within twenty percent`() {
         val base = 10_000L
         repeat(200) {
@@ -41,6 +58,11 @@ class ReconnectPolicyTest {
         }
         try {
             policy.delayFor(0)
+            throw AssertionError("expected IllegalArgumentException")
+        } catch (_: IllegalArgumentException) {
+        }
+        try {
+            policy.reserveAttempt(-1)
             throw AssertionError("expected IllegalArgumentException")
         } catch (_: IllegalArgumentException) {
         }
