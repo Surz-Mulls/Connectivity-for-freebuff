@@ -1,18 +1,18 @@
 {
   "schema": "continuity.status/1",
-  "updated": "2026-11-21T08:10:00Z",
+  "updated": "2026-11-26T03:55:00Z",
   "project": "Connectivity for FreeBuff",
-  "stage": "post-release-hardening",
-  "module": "Five review fixes on Grok: Android reconnect exhaustion, desktop re-arm, IPv6-safe target storage, Firefox/Zen native messaging, release-tooling hardening",
-  "state": "implemented-and-tested (unit/CI); device and browser-session paths remain implemented-unverified",
+  "stage": "pre-release-published",
+  "module": "v0.1.0-test.4 published from Grok; Arch pkgver now follows the tag",
+  "state": "published pre-release; device and browser-session paths remain implemented-unverified",
   "branch": "Grok",
-  "head_commit": "4c3d97c210f0c9e8017d8b7a32742eac831ec70d",
-  "head_commit_role": "final code/CI commit for the fix pass; the STATUS/PROGRESS record is a later docs-only commit",
-  "tag": "v0.1.0-test.3",
+  "head_commit": "b96fccfa6fe4d2419eb6673c38d7d67cd89bbe7d",
+  "head_commit_role": "commit the v0.1.0-test.4 tag points at; a later STATUS/PROGRESS record does not move the tag",
+  "tag": "v0.1.0-test.4",
   "tag_published": true,
-  "tag_target_commit": "d9bad85b587f84a1c417815630561fbec2f8a901",
-  "release_published_at": "2026-11-16T09:46:25Z",
-  "release_url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.3",
+  "tag_target_commit": "b96fccfa6fe4d2419eb6673c38d7d67cd89bbe7d",
+  "release_published_at": "2026-11-26T03:52:48Z",
+  "release_url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.4",
   "release_prerelease": true,
   "release_draft": false,
   "release_asset_count": 9,
@@ -30,9 +30,15 @@
       "commit": "8db808a7c70513f545f1eb8656579911ce4c59b1",
       "asset_count": 7,
       "note": "tag, release and assets unchanged; AppImage is defective and no old asset was replaced"
+    },
+    {
+      "tag": "v0.1.0-test.3",
+      "commit": "d9bad85b587f84a1c417815630561fbec2f8a901",
+      "asset_count": 9,
+      "note": "tag, release and assets unchanged by the test.4 publish"
     }
   ],
-  "release_record": "docs/RELEASE_v0.1.0-test.3.md",
+  "release_record": "PROGRESS.md",
   "corrections": "docs/RELEASE_CORRECTIONS.md",
   "user_validation": "docs/USER_VALIDATION.md",
   "tests": {
@@ -42,41 +48,41 @@
     "browser_extension": "scripts/tests/test_browser_extension_install.py -> pass: Chromium ID and Gecko ID manifests, Chromium allow-list unchanged, uninstall removes both.",
     "release_tooling": "scripts/tests/test_verify_release.py and scripts/tests/test_check_appimage_glibc.py -> pass; tools/verify_release.py v0.1.0-test.3 -> 0 FAIL, 0 WARN against the published assets.",
     "reconnect_dead_host": "Simulated desktop run -> reconnect.gave_up {'attempts': 3, 'last_error': 'ConnectionError: host unreachable'}, state offline, exactly 3 attempts.",
-    "ci": "Run 44881944727 on 4c3d97c: python, android, linux, arch-makepkg, appimage-images all success.",
-    "release_candidate_dry_build": "Run 44882179185 on 4c3d97c: build success, publish skipped; glibc 2.34, GLIBCXX 3.4.29, CXXABI 1.3.13, no OPENSSL_ symbols; verifier 0 FAIL/0 WARN; no tag/release v0.1.0-test.4 created."
+    "ci": "Run 45750925326 on b96fccf: python (99 passed), android, linux, arch-makepkg, appimage-images all success.",
+    "release_candidate": "Run 45751208542 on b96fccf: build and publish success. tools/verify_release.py --local on the downloaded assets: 0 FAIL, 0 WARN. Arch pkgver 0.1.0.test.4, verify-arch-install ok."
   },
   "published_assets": {
     "continuity-android-debug.apk": {
       "size": 29202779,
-      "sha256": "090297a4aed5779479a66b7762d1b8ef58b83748c86d3829e9a408b15a0605b2",
+      "sha256": "2fbeef430d067deeac4bd063fb171143f987df426b8d8001e2d99611510bbf27",
       "signing": "debug"
     },
     "continuity-linux-x86_64.AppImage": {
       "size": 136673784,
-      "sha256": "ba5153b44d7fc9b24370d377d6757fe43bfc0e6cde406bd4b0a14e7d56a5baca",
+      "sha256": "f8cbad51c35a1fd2d7d42eb00e8064da897b9c647c78ef7a79112cc46972ac4c",
       "glibc_floor": "2.34"
     },
-    "continuity-0.1.0.test3-1-x86_64.pkg.tar.zst": {
-      "size": 78300,
-      "sha256": "43ab03e787e0443a29d83152c86240955e8417dc7f62a686b245f19d85a97ecd",
+    "continuity-0.1.0.test.4-1-x86_64.pkg.tar.zst": {
+      "size": 78703,
+      "sha256": "29e7eaad539b4cf87ee273815ea25ee557f95f777bac40174ffa731adf959bca",
       "type": "makepkg"
     },
     "continuity-linux-x86_64-portable.tar.zst": {
-      "size": 153595,
-      "sha256": "aad64defbf399fc41433d7c39b8e9bf0268f4075224dff08b033a60f6f113f84"
+      "size": 154519,
+      "sha256": "42b948cc6a7d36f587ecc048ef60886d3f7c0ace14040937cd8a253cd790dc09"
     },
     "continuity.desktop": {
       "size": 208,
       "sha256": "c77eb75d8a3138a4730920fc2271c57b5821f075ce5929f1307fee4193480914"
     },
     "BUILD-MANIFEST.json": {
-      "size": 1745,
-      "sha256": "077799c47a426b91bc451e3c966286932783d72e477d047ae3599734ee4da16f",
-      "commit": "d9bad85b587f84a1c417815630561fbec2f8a901"
+      "size": 1747,
+      "sha256": "a22482e4c8b864a9341f5454cf7256c50c06873f63b2708699ef65c8f4adbb94",
+      "commit": "b96fccfa6fe4d2419eb6673c38d7d67cd89bbe7d"
     },
     "SHA256SUMS": {
-      "size": 780,
-      "sha256": "c1650e4f1b8f18f4cadc60759b3cd71fd9213838ac6793a727cb5a8cc4208bbf"
+      "size": 781,
+      "sha256": "850c126d0ec1b0ccdd08fa4ef7dd232a7d8d000d22bd4859c15f984cb71f1c75"
     }
   },
   "runs": {
@@ -97,6 +103,13 @@
       "commit": "d9bad85b587f84a1c417815630561fbec2f8a901",
       "result": "published pre-release; verifier 0 FAIL/0 WARN",
       "url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/43841944574"
+    },
+    "released_v0.1.0_test4": {
+      "run": 45751208542,
+      "commit": "b96fccfa6fe4d2419eb6673c38d7d67cd89bbe7d",
+      "result": "published pre-release; local verifier 0 FAIL/0 WARN on downloaded assets",
+      "url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/45751208542",
+      "ci": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/45750925326"
     }
   },
   "hardware": {

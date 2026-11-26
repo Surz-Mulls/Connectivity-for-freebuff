@@ -5,6 +5,38 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-26 — v0.1.0-test.4 published
+
+Tag `v0.1.0-test.4` -> `b96fccfa6fe4d2419eb6673c38d7d67cd89bbe7d`. Pre-release published
+`2026-11-26T03:52:48Z`:
+[release](https://github.com/Surz-Mulls/Connectivity-for-freebuff/releases/tag/v0.1.0-test.4).
+`main` remains `3ee3a9c3…`. `FreeBuff` remains `fdc9842…`. Tags and assets for test.1, test.2 and
+test.3 were not modified.
+
+| Item | Status | Evidence |
+|---|---|---|
+| CI on the tagged commit | implemented-and-tested | [45750925326](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/45750925326): python 99 passed, android, linux, arch-makepkg, appimage-images all success |
+| Release build and publish | implemented-and-tested | [45751208542](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/45751208542): build and publish success; `arch pkgver 0.1.0.test.4`; `verify-arch-install: ok (makepkg package, qml=qml6)` |
+| Independent verifier | implemented-and-tested | Downloaded assets; `sha256sum -c SHA256SUMS` OK; `tools/verify_release.py --local` **0 FAIL, 0 WARN**. A second online verifier call hit GitHub 403 rate limit after the download and is not a content failure |
+| Local unsigned release APK | implemented-and-tested | `assembleRelease` produced `app-release-unsigned.apk` (24,390,699 B, `586129aa…`). No production keystore exists, so it was not published |
+| Local makepkg | blocked | This sandbox cannot `setgroups` or drop uid, and apt cannot install podman. The published Arch package is the CI `makepkg` build, not the local layout archive |
+| Device journeys | implemented-unverified | No Mi 12 / Hyprland session in this run |
+
+Published installable assets (SHA-256):
+
+| Asset | Size | SHA-256 |
+|---|---:|---|
+| `continuity-android-debug.apk` | 29,202,779 | `2fbeef430d067deeac4bd063fb171143f987df426b8d8001e2d99611510bbf27` |
+| `continuity-linux-x86_64.AppImage` | 136,673,784 | `f8cbad51c35a1fd2d7d42eb00e8064da897b9c647c78ef7a79112cc46972ac4c` |
+| `continuity-0.1.0.test.4-1-x86_64.pkg.tar.zst` | 78,703 | `29e7eaad539b4cf87ee273815ea25ee557f95f777bac40174ffa731adf959bca` |
+| `continuity-linux-x86_64-portable.tar.zst` | 154,519 | `42b948cc6a7d36f587ecc048ef60886d3f7c0ace14040937cd8a253cd790dc09` |
+| `continuity.desktop` | 208 | `c77eb75d8a3138a4730920fc2271c57b5821f075ce5929f1307fee4193480914` |
+
+The APK is debug-signed (v2, Android debug certificate), not production-signed, and was not installed
+on a phone.
+
+---
+
 ## 2026-11-21 — Post-release fix pass verification
 
 Branch `Grok`, code head `4c3d97c210f0c9e8017d8b7a32742eac831ec70d`. CI run
