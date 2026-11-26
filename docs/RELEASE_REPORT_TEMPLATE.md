@@ -15,7 +15,7 @@ Built once by the `build` job; the `publish` job downloads those exact bytes and
 | Check | Result / evidence |
 |---|---|
 | Python daemon suite | executed in the build job (`python -m pytest daemon/tests -q`) |
-| Android JVM tests | executed in the build job (`:app:testDebugUnitTest`, 22 tests) |
+| Android JVM tests | executed in the build job (`:app:testDebugUnitTest`); the job log is the count |
 | Android lint | executed in the build job (`:app:lintDebug`) |
 | Android debug APK | built by `:app:assembleDebug`; debug-signed; APK v2+ signature verified by the release verifier |
 | Linux packaging | `scripts/package-linux.sh`: AppImage, portable archive, desktop entry |
@@ -37,6 +37,7 @@ Arch package is installed in a container, not on the target laptop. Those rows r
 
 ## Old releases
 
-`v0.1.0-test.1` and `v0.1.0-test.2` are untouched. Their AppImages are defective (they exec a
+`v0.1.0-test.1`, `v0.1.0-test.2` and every earlier published tag, including `v0.1.0-test.3` when this
+tag is newer, are untouched. The test.1 and test.2 AppImages are defective (they exec a
 build-host `/opt/freestyle` interpreter) and their Arch assets are manual layout archives. This
 release does not modify, replace or re-tag them. See `docs/RELEASE_CORRECTIONS.md`.

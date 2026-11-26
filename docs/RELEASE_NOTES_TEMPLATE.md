@@ -44,8 +44,8 @@ same source and the same pinned interpreter/tool. The measured whole-image floor
 The `v0.1.0-test.1` and `v0.1.0-test.2` AppImages are **defective** and must not be used: their
 `usr/bin/python3.12` was a wrapper that execs `/opt/freestyle/python/bin/python3` from the build
 machine, so they are not self-contained. Their Arch assets are manually assembled layout archives,
-not `makepkg` packages. See `docs/RELEASE_CORRECTIONS.md`. Those releases and tags are unchanged;
-this release replaces them.
+not `makepkg` packages. See `docs/RELEASE_CORRECTIONS.md`. Those releases and tags are unchanged.
+`v0.1.0-test.3` stays published as-is; this pre-release does not replace or re-upload its assets.
 
 ## What is not verified
 

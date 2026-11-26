@@ -71,8 +71,17 @@ jobs:
       - name: Build the makepkg Arch package in a clean Arch container
         run: |
           mkdir -p dist/makepkg
+          pkgver="${RELEASE_TAG#v}"
+          pkgver="${pkgver//-/.}"
+          case "$pkgver" in
+            ""|*[!0-9A-Za-z._+]*)
+              echo "refusing Arch pkgver derived from tag: ${pkgver:-<empty>}" >&2
+              exit 1
+              ;;
+          esac
           echo "candidate commit $(git rev-parse HEAD)"
-          docker run --rm -i -e CONTINUITY_PKGVER="${PKGVER}" -v "$PWD:/src" archlinux:latest bash -s <<'EOS'
+          echo "arch pkgver $pkgver from tag $RELEASE_TAG"
+          docker run --rm -i -e CONTINUITY_PKGVER="$pkgver" -v "$PWD:/src" archlinux:latest bash -s <<'EOS'
           set -euo pipefail
           pacman -Syu --noconfirm --needed \
             base-devel git sudo python python-cryptography python-zeroconf \
@@ -104,8 +113,6 @@ jobs:
           bash /src/scripts/verify-arch-install.sh
           cp -v "${built[0]}" /src/dist/makepkg/
           EOS
-        env:
-          PKGVER: "0.1.0.test3"
       - name: Assemble, checksum, document and verify the candidate
         run: |
           python3 scripts/assemble-release.py \
