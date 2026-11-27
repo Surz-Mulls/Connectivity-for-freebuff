@@ -145,12 +145,21 @@ def download_release(tag: str, target: pathlib.Path, report: Report) -> bool:
         report.fail("release assets", "release has no assets")
         return False
     report.ok("release exists", f"{tag}: {len(assets)} assets")
+    # Validate every name before downloading anything: a duplicate would silently overwrite the
+    # first file and make SHA256SUMS verification depend on ordering.
+    names: list[str] = []
     for asset in assets:
         raw_name = str(asset.get("name", ""))
         name = safe_asset_name(raw_name)
         if name is None:
             report.fail("download", f"unsafe asset name {raw_name!r}")
             return False
+        names.append(name)
+    duplicates = sorted({name for name in names if names.count(name) > 1})
+    if duplicates:
+        report.fail("download", f"duplicate asset name(s): {', '.join(duplicates)}")
+        return False
+    for asset, name in zip(assets, names):
         destination = target / name
         try:
             download(asset["browser_download_url"], destination)
@@ -180,6 +189,9 @@ def parse_sums(path: pathlib.Path, report: Report) -> dict[str, str]:
         name = safe_asset_name(parts[1].lstrip("*"))
         if name is None:
             report.fail("SHA256SUMS syntax", f"line {number}: unsafe asset name {parts[1]!r}")
+            continue
+        if name in entries:
+            report.fail("SHA256SUMS syntax", f"line {number}: duplicate entry for {name!r}")
             continue
         entries[name] = parts[0]
     if not entries:
