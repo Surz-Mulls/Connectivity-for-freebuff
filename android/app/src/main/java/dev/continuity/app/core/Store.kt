@@ -24,9 +24,55 @@ class PairingDecision(val request: JSONObject) {
     @Volatile var accepted = false
 }
 
+private val IPV6_GROUP = Regex("[0-9A-Fa-f]{1,4}")
+private val IPV4_LITERAL = Regex("(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})")
+
+private fun isIpv4Literal(value: String): Boolean {
+    val match = IPV4_LITERAL.matchEntire(value) ?: return false
+    return match.groupValues.drop(1).all { it.toInt() in 0..255 }
+}
+
+/** Number of 16-bit groups in a colon-separated IPv6 half; an IPv4 tail counts as two. */
+private fun ipv6Groups(part: String): Int? {
+    if (part.isEmpty()) return 0
+    val items = part.split(':')
+    if (items.any { it.isEmpty() }) return null
+    var groups = 0
+    items.forEachIndexed { index, item ->
+        if (item.contains('.')) {
+            if (index != items.lastIndex || !isIpv4Literal(item)) return null
+            groups += 2
+        } else {
+            if (!IPV6_GROUP.matches(item)) return null
+            groups += 1
+        }
+    }
+    return groups
+}
+
+/**
+ * Strict structural IPv6 literal check: no DNS, no `java.net` fallback. A zone identifier
+ * (`%eth0`) is rejected because a remembered desktop target is a routable address, not a scoped
+ * link-local one.
+ */
+private fun isIpv6Literal(value: String): Boolean {
+    if (value.isEmpty() || value.contains('%')) return false
+    val first = value.indexOf("::")
+    if (first < 0) return ipv6Groups(value) == 8
+    if (value.indexOf("::", first + 1) >= 0) return false
+    val left = ipv6Groups(value.substring(0, first)) ?: return false
+    val right = ipv6Groups(value.substring(first + 2)) ?: return false
+    return left + right < 8
+}
+
 /**
  * A remembered desktop endpoint. Host and port are stored separately so an IPv6 literal is never
  * split on one of its own colons. [parse] exists only for the legacy combined string.
+ *
+ * Asymmetry: [fromParts] accepts a host-only bare IPv6 literal such as `2001:db8::1` because the
+ * port is already a separate argument. [parse] cannot: it must split a combined `host:port`, and a
+ * bare IPv6 value is ambiguous (its last group looks like a port), so [parse] requires a port and
+ * rejects `2001:db8::1` rather than guessing. The old writer always appended a port.
  */
 data class DesktopTarget(val host: String, val port: Int) {
     init {
@@ -37,8 +83,9 @@ data class DesktopTarget(val host: String, val port: Int) {
     companion object {
         /**
          * Parse the old `host:port` field defensively. Bracketed IPv6 is unambiguous; a bare IPv6
-         * literal is accepted with its last group as the port (the old writer always appended a
-         * port). New writes never use this parser because the fields are separate.
+         * literal is accepted with its last group as the port. Every host that survives
+         * [fromParts] is a hostname, an IPv4 literal or a strict IPv6 literal. New writes never
+         * use this parser because the fields are separate.
          */
         fun parse(value: String?): DesktopTarget? {
             val text = value?.trim().orEmpty()
@@ -53,19 +100,65 @@ data class DesktopTarget(val host: String, val port: Int) {
             return fromParts(text.substring(0, split), text.substring(split + 1).toIntOrNull())
         }
 
+        /**
+         * Build a target from stored fields. Brackets are display syntax and are stripped once;
+         * any bracket left after that, any whitespace, and any colon-containing host that is not
+         * a strict IPv6 literal is rejected instead of being handed to a socket.
+         */
         fun fromParts(host: String?, port: Int?): DesktopTarget? {
             val cleaned = host?.trim().orEmpty()
             if (cleaned.isEmpty() || port == null || port !in 1..65535) return null
-            // Brackets are display syntax; the socket wants the bare address.
             val unbracketed = if (cleaned.startsWith("[") && cleaned.endsWith("]")) {
                 cleaned.substring(1, cleaned.length - 1)
             } else {
                 cleaned
             }
-            if (unbracketed.isBlank() || unbracketed.all { it == ':' }) return null
+            if (unbracketed.isEmpty()) return null
+            if (unbracketed.any { it == '[' || it == ']' || it.isWhitespace() }) return null
+            if (unbracketed.contains(':') && !isIpv6Literal(unbracketed)) return null
             return DesktopTarget(unbracketed, port)
         }
     }
+}
+
+/** Preference surface the one-time desktop-target migration needs; fakeable in JVM tests. */
+internal interface DesktopTargetPrefs {
+    fun contains(key: String): Boolean
+    fun getString(key: String, fallback: String?): String?
+    fun getInt(key: String, fallback: Int): Int
+    fun putString(key: String, value: String)
+    fun putInt(key: String, value: Int)
+    fun remove(key: String)
+}
+
+private const val TARGET_HOST_KEY = "last_desktop_host"
+private const val TARGET_PORT_KEY = "last_desktop_port"
+private const val TARGET_LEGACY_KEY = "last_desktop"
+
+/**
+ * Read the structured target, migrating the old combined `last_desktop` value at most once.
+ *
+ * The split keys are written before the legacy key is removed, so a later read takes the
+ * structured branch and never re-runs the parser. A malformed legacy value is left untouched and
+ * returns null: there is nothing safe to migrate, and the rest of the store is never modified.
+ */
+internal fun readDesktopTarget(prefs: DesktopTargetPrefs): DesktopTarget? {
+    if (prefs.contains(TARGET_HOST_KEY) && prefs.contains(TARGET_PORT_KEY)) {
+        return DesktopTarget.fromParts(
+            prefs.getString(TARGET_HOST_KEY, null),
+            prefs.getInt(TARGET_PORT_KEY, 0)
+        )
+    }
+    val legacy = prefs.getString(TARGET_LEGACY_KEY, null) ?: return null
+    val parsed = DesktopTarget.parse(legacy) ?: return null
+    writeDesktopTarget(prefs, parsed)
+    return parsed
+}
+
+internal fun writeDesktopTarget(prefs: DesktopTargetPrefs, target: DesktopTarget) {
+    prefs.putString(TARGET_HOST_KEY, target.host)
+    prefs.putInt(TARGET_PORT_KEY, target.port)
+    prefs.remove(TARGET_LEGACY_KEY)
 }
 
 /** Settings + pinned fingerprints, stored in the app's private SharedPreferences. */
@@ -117,20 +210,24 @@ class Store(context: Context) {
         get() = prefs.getString("expected_fingerprint", null)
         set(value) = prefs.edit().putString("expected_fingerprint", value).apply()
 
+    private val targetPrefs = object : DesktopTargetPrefs {
+        override fun contains(key: String) = prefs.contains(key)
+        override fun getString(key: String, fallback: String?) = prefs.getString(key, fallback)
+        override fun getInt(key: String, fallback: Int) = prefs.getInt(key, fallback)
+        override fun putString(key: String, value: String) {
+            prefs.edit().putString(key, value).apply()
+        }
+        override fun putInt(key: String, value: Int) {
+            prefs.edit().putInt(key, value).apply()
+        }
+        override fun remove(key: String) {
+            prefs.edit().remove(key).apply()
+        }
+    }
+
     /** Structured target; migrates the old combined `last_desktop` value once, on first read. */
     val lastDesktopTarget: DesktopTarget?
-        get() {
-            if (prefs.contains("last_desktop_host") && prefs.contains("last_desktop_port")) {
-                return DesktopTarget.fromParts(
-                    prefs.getString("last_desktop_host", null),
-                    prefs.getInt("last_desktop_port", 0)
-                )
-            }
-            val legacy = prefs.getString("last_desktop", null) ?: return null
-            val parsed = DesktopTarget.parse(legacy) ?: return null
-            rememberDesktop(parsed.host, parsed.port)
-            return parsed
-        }
+        get() = readDesktopTarget(targetPrefs)
 
     val lastDesktopHost: String?
         get() = lastDesktopTarget?.host
@@ -142,11 +239,7 @@ class Store(context: Context) {
         val target = requireNotNull(DesktopTarget.fromParts(host, port)) {
             "invalid desktop endpoint"
         }
-        prefs.edit()
-            .putString("last_desktop_host", target.host)
-            .putInt("last_desktop_port", target.port)
-            .remove("last_desktop")
-            .apply()
+        writeDesktopTarget(targetPrefs, target)
     }
 
     fun expectedFingerprint(): String? = expectedFingerprintValue
