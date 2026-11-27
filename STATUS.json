@@ -1,10 +1,10 @@
 {
   "schema": "continuity.status/1",
-  "updated": "2026-11-27T03:39:51Z",
+  "updated": "2026-11-27T04:05:00Z",
   "project": "Connectivity for FreeBuff",
   "stage": "pre-release-published",
-  "module": "post-v0.1.0-test.4 review fixes on Grok (periodic discovery, fail-closed scanner, duplicate rejection, target validation)",
-  "state": "four follow-up fixes committed and locally tested; no new tag or release; device and browser-session paths remain implemented-unverified",
+  "module": "post-v0.1.0-test.4 review fixes on Grok (periodic discovery, fail-closed scanner, duplicate rejection, target validation) and a prepared v0.1.0-test.5 candidate",
+  "state": "four follow-up fixes committed, CI green, candidate built and verified in CI but NOT published; device and browser-session paths remain implemented-unverified",
   "branch": "Grok",
   "head_commit": "b96fccfa6fe4d2419eb6673c38d7d67cd89bbe7d",
   "head_commit_role": "commit the v0.1.0-test.4 tag points at; a later STATUS/PROGRESS record does not move the tag",
@@ -39,6 +39,23 @@
       "note": "tag, release and assets unchanged by the test.4 publish"
     }
   ],
+  "prepared_candidate": {
+    "tag": "v0.1.0-test.5",
+    "published": false,
+    "commit": "e20ea157d9f59f70087bd25e9c3f45afd63c5d64",
+    "run": 45936221210,
+    "run_url": "https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/45936221210",
+    "publish_job": "skipped (confirm empty)",
+    "artifact_bytes": 147315998,
+    "assets": {
+      "continuity-linux-x86_64.AppImage": "314801a69549318e60b0cbb9c43b882e21c57b299770f6199143e9f3f24e824c",
+      "continuity-android-debug.apk": "de9eb0fa61d641381ca3e19fe304aae0facd3fdb3971928b9425ead3ce0ee999",
+      "continuity-0.1.0.test.5-1-x86_64.pkg.tar.zst": "c2f2c5520f29d5ddfe2c479c2da047bde894c0e93343a952e704b495184e4792",
+      "continuity-linux-x86_64-portable.tar.zst": "d595e698410a00c7f1e293eecb3a3902b3bd5306e3da6efbed348f5e23a93029",
+      "continuity.desktop": "c77eb75d8a3138a4730920fc2271c57b5821f075ce5929f1307fee4193480914"
+    },
+    "note": "No v0.1.0-test.5 tag or release exists. Publication needs the owner's explicit approval. The candidate manifest commit is the code commit e20ea15; the later docs record commit does not change the binaries."
+  },
   "release_record": "PROGRESS.md",
   "corrections": "docs/RELEASE_CORRECTIONS.md",
   "user_validation": "docs/USER_VALIDATION.md",
@@ -52,7 +69,11 @@
     "periodic_discovery": "daemon/tests/test_reconnect.py + test_periodic_discovery.py + test_discovery.py -> 18 passed; exhausted trusted peer re-arms exactly one bounded series, untrusted/revoked/unknown start none, stop cancels the single browse task.",
     "reconnect_dead_host": "Simulated desktop run -> reconnect.gave_up {'attempts': 3, 'last_error': 'ConnectionError: host unreachable'}, state offline, exactly 3 attempts.",
     "ci": "Run 45750925326 on b96fccf: python (99 passed), android, linux, arch-makepkg, appimage-images all success.",
-    "release_candidate": "Run 45751208542 on b96fccf: build and publish success. tools/verify_release.py --local on the downloaded assets: 0 FAIL, 0 WARN. Arch pkgver 0.1.0.test.4, verify-arch-install ok."
+    "release_candidate": "Run 45751208542 on b96fccf: build and publish success. tools/verify_release.py --local on the downloaded assets: 0 FAIL, 0 WARN. Arch pkgver 0.1.0.test.4, verify-arch-install ok.",
+    "ci_after_post_test4_fixes": "Run 45935541196 on e20ea15: python, android, linux, arch-makepkg, appimage-images all success.",
+    "candidate_v0_1_0_test5": "Run 45936221210 on e20ea15: build success, publish skipped (confirm empty). assemble-release.py invoked tools/verify_release.py and passed. Artifact release-candidate 147,315,998 B; the first dispatch (45935815320) failed during Android dependency resolution with Maven Central HTTP 429 and was retried.",
+    "candidate_local_verifier": "Independent tools/verify_release.py --local --expect-commit e20ea15: 16 PASS, 1 FAIL. SHA256SUMS, manifest commit, AppImage extract/ELF/host paths, APK signature, Arch metadata, portable layout and report hashes pass. The AppImage self-test cannot start in this VM because libglib-2.0.so.0 is absent and sudo is blocked; the same self-test passed in the CI build and linux jobs. Recorded as an environment limitation, not a pass.",
+    "candidate_scan": "scripts/check-appimage-glibc.py on the candidate AppImage: 312 inspected, 0 failed; GLIBC 2.34, GLIBCXX 3.4.29, CXXABI 1.3.13, no OPENSSL."
   },
   "published_assets": {
     "continuity-android-debug.apk": {
@@ -154,8 +175,9 @@
     "new_pre_release": "v0.1.0-test.4",
     "post_release_fixes_ci_green": true,
     "post_release_fixes_release_candidate_dry_build": true,
-    "post_test4_fixes_ci_green": "pending",
-    "post_test4_fixes_candidate_prepared": false
+    "post_test4_fixes_ci_green": true,
+    "post_test4_fixes_candidate_prepared": true,
+    "post_test4_fixes_candidate_published": false
   },
   "fixes": {
     "fix1_android_reconnect": {

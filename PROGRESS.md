@@ -17,6 +17,26 @@ Branch `Grok`, four code commits on top of `06b98c8`. No tag was moved and no re
 | Verifier rejects duplicates | `9c4a960` | implemented-and-tested | Duplicate asset names fail before any download; a duplicate `SHA256SUMS` entry fails on the second line instead of overwriting. Tests also cover missing/extra files, `..`/absolute names, malformed manifest JSON, commit mismatch and checksum mismatch; `main()` exits 1 on the duplicate-sums fixture |
 | Desktop target validation + migration idempotency | `b68d453` | implemented-and-tested (JVM) | `DesktopTarget` rejects leftover brackets, whitespace and colon-containing hosts that are not strict IPv6 literals; host-only IPv6 is accepted only via `fromParts`, documented in KDoc. Migration moved behind a fakeable preference surface. Android **33 JVM tests, 0 failures**, `testDebugUnitTest BUILD SUCCESSFUL` in 2m03s; the migration suites prove the second read does not re-run/write migration, the legacy key is gone, and trust/fingerprint keys are untouched |
 
+### v0.1.0-test.5 candidate prepared, not published
+
+Branch CI [45935541196](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/45935541196)
+on `e20ea15`: `python`, `android`, `linux`, `arch-makepkg` and `appimage-images` all **success**.
+The dispatch-only release-candidate run
+[45936221210](https://github.com/Surz-Mulls/Connectivity-for-freebuff/actions/runs/45936221210)
+built the candidate, ran `scripts/assemble-release.py` (which invokes `tools/verify_release.py`) and
+**skipped publish** because `confirm` was empty. The first dispatch, run 45935815320, failed before
+any build artifact was produced because Maven Central returned HTTP 429 while resolving the Kotlin
+Gradle plugin; it was retried, not worked around. **No `v0.1.0-test.5` tag or release exists.**
+
+Candidate assets (artifact 147,315,998 B): AppImage 136,677,880 B `314801a6…`; APK 29,219,163 B
+`de9eb0fa…` (debug-signed); Arch `continuity-0.1.0.test.5-1` 80,512 B `c2f2c552…`; portable 158,639 B
+`d595e698…`; desktop 208 B `c77eb75d…`. A second, independent local
+`tools/verify_release.py --local --expect-commit e20ea15` reported **16 PASS, 1 FAIL**: every content
+check passed, but the AppImage self-test could not load `libglib-2.0.so.0` in this VM (no system Qt
+runtime, and sudo is blocked by `no_new_privs`). The same self-test passed in the CI build and
+`linux` jobs. The local symbol scan of the candidate AppImage was **312 inspected, 0 failed**: GLIBC
+2.34, GLIBCXX 3.4.29, CXXABI 1.3.13, no OPENSSL. Publication is waiting for explicit owner approval.
+
 Not verified (device/browser-bound, unchanged): real Mi 12 Wi-Fi/sleep-wake/IPv6 reconnect, the
 `SharedPreferences` migration through a real Android `Context` (no Robolectric; the pure migration
 is tested), a live Firefox/Zen session, and live mDNS between two hosts. Debian/RPM packaging still
