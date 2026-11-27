@@ -22,7 +22,7 @@ from .clipboard import ClipboardService
 from .config import Settings, runtime_dir
 from .dex import DexError, DexService
 from .diagnostics import DiagnosticsRunner, export as export_report
-from .discovery import Discovery
+from .discovery import DISCOVERY_ACTIVE_INTERVAL, DISCOVERY_IDLE_INTERVAL, Discovery
 from .identity import Identity
 from .notifications import NotificationService
 from .protocol import Msg, ProtocolError, now_iso, sanitize_filename, validate_url
@@ -158,7 +158,8 @@ class DeviceManager:
         self.transfers = TransferService(settings, self.emit, approver=self._approve_transfer)
         self.dex = DexService(settings, self.emit)
         self.discovery = Discovery(identity, settings, self.emit,
-                                   on_results=self.on_discovered_peers)
+                                   on_results=self.on_discovered_peers,
+                                   interval_for=self.discovery_interval)
         self.diagnostics = DiagnosticsRunner(settings=settings, identity=identity, manager=self)
         self.sessions: dict[str, Session] = {}
         self.devices: dict[str, Device] = {}
@@ -330,6 +331,20 @@ class DeviceManager:
         state.host, state.port = host, port
         state.name = device.name if device else ""
         state.state, state.attempt, state.last_error = "idle", 0, ""
+
+    def discovery_interval(self) -> float:
+        """Browse often only while fresh discovery evidence could matter.
+
+        A live session or a running reconnect series browses every 30 s; an idle daemon browses
+        every 120 s. Both are far slower than the backoff floor, so rediscovery cannot turn into a
+        reconnect storm.
+        """
+        if self.sessions:
+            return DISCOVERY_ACTIVE_INTERVAL
+        for state in self.reconnects.values():
+            if state.task is not None and not state.task.done():
+                return DISCOVERY_ACTIVE_INTERVAL
+        return DISCOVERY_IDLE_INTERVAL
 
     def schedule_reconnect(self, fingerprint: str, reason: str) -> None:
         """Start (or restart) the bounded reconnect loop for a peer we have a target address for.
