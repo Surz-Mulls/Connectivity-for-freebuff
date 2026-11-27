@@ -1,13 +1,14 @@
 {
   "schema": "continuity.status/1",
-  "updated": "2026-11-26T03:55:00Z",
+  "updated": "2026-11-27T03:39:51Z",
   "project": "Connectivity for FreeBuff",
   "stage": "pre-release-published",
-  "module": "v0.1.0-test.4 published from Grok; Arch pkgver now follows the tag",
-  "state": "published pre-release; device and browser-session paths remain implemented-unverified",
+  "module": "post-v0.1.0-test.4 review fixes on Grok (periodic discovery, fail-closed scanner, duplicate rejection, target validation)",
+  "state": "four follow-up fixes committed and locally tested; no new tag or release; device and browser-session paths remain implemented-unverified",
   "branch": "Grok",
   "head_commit": "b96fccfa6fe4d2419eb6673c38d7d67cd89bbe7d",
   "head_commit_role": "commit the v0.1.0-test.4 tag points at; a later STATUS/PROGRESS record does not move the tag",
+  "post_test4_code_head": "b68d45373a6367791e66b4fdd856a81334df03ae",
   "tag": "v0.1.0-test.4",
   "tag_published": true,
   "tag_target_commit": "b96fccfa6fe4d2419eb6673c38d7d67cd89bbe7d",
@@ -42,11 +43,13 @@
   "corrections": "docs/RELEASE_CORRECTIONS.md",
   "user_validation": "docs/USER_VALIDATION.md",
   "tests": {
-    "python": "99 passed (.venv/bin/python -m pytest daemon/tests -q); baseline was 97 before the two new reconnect tests.",
-    "android": "27 JVM tests, 0 failures; local lintDebug BUILD SUCCESSFUL in 36s; assembleDebug BUILD SUCCESSFUL in CI run 44881944727.",
+    "python": "107 passed (.venv/bin/python -m pytest daemon/tests -q); baseline was 99 before the eight periodic-discovery tests.",
+    "android": "33 JVM tests, 0 failures (:app:testDebugUnitTest BUILD SUCCESSFUL in 2m03s); DesktopTargetTest 5 and DesktopTargetMigrationTest 5 cover the new validation/migration cases.",
     "theme": ".venv/bin/python scripts/generate-theme.py --check -> no drift.",
     "browser_extension": "scripts/tests/test_browser_extension_install.py -> pass: Chromium ID and Gecko ID manifests, Chromium allow-list unchanged, uninstall removes both.",
-    "release_tooling": "scripts/tests/test_verify_release.py and scripts/tests/test_check_appimage_glibc.py -> pass; tools/verify_release.py v0.1.0-test.3 -> 0 FAIL, 0 WARN against the published assets.",
+    "release_tooling": "scripts/tests/test_verify_release.py -> pass: duplicate asset names fail before download, duplicate SHA256SUMS entries fail, missing/extra/traversal/absolute names and manifest failures covered; main() exits 1 on the duplicate-sums fixture. tools/verify_release.py v0.1.0-test.3 still 0 FAIL/0 WARN.",
+    "appimage_scan": "scripts/tests/test_check_appimage_glibc.py -> 11 fail-closed cases pass; the real v0.1.0-test.4 AppImage (sha256 f8cbad51…) scanned: 312 ELF files inspected, 0 failures, GLIBC 2.34, GLIBCXX 3.4.29, CXXABI 1.3.13, no OPENSSL.",
+    "periodic_discovery": "daemon/tests/test_reconnect.py + test_periodic_discovery.py + test_discovery.py -> 18 passed; exhausted trusted peer re-arms exactly one bounded series, untrusted/revoked/unknown start none, stop cancels the single browse task.",
     "reconnect_dead_host": "Simulated desktop run -> reconnect.gave_up {'attempts': 3, 'last_error': 'ConnectionError: host unreachable'}, state offline, exactly 3 attempts.",
     "ci": "Run 45750925326 on b96fccf: python (99 passed), android, linux, arch-makepkg, appimage-images all success.",
     "release_candidate": "Run 45751208542 on b96fccf: build and publish success. tools/verify_release.py --local on the downloaded assets: 0 FAIL, 0 WARN. Arch pkgver 0.1.0.test.4, verify-arch-install ok."
@@ -136,7 +139,8 @@
     "Firefox/Zen native-host registration is tested, but a real Firefox/Zen session is needed to confirm MV3 service-worker/event-page behavior.",
     "Real Wi-Fi reconnection, IPv6 reconnect and the Android SharedPreferences migration need a device; the parser and policy logic are unit-tested.",
     "The old-release correction notice in docs/RELEASE_CORRECTIONS.md was deliberately not applied.",
-    "Real Distrobox/podman remains unverified here; a machine with those tools can run scripts/build-arch-distrobox.sh and verify-arch-install.sh."
+    "Real Distrobox/podman remains unverified here; a machine with those tools can run scripts/build-arch-distrobox.sh and verify-arch-install.sh.",
+    "The v0.1.0-test.5 candidate is built but not published; publishing needs explicit approval."
   ],
   "release_gate_summary": {
     "exact_commit_ci_green": true,
@@ -147,9 +151,11 @@
     "base_image_job_green": true,
     "old_releases_untouched": true,
     "main_untouched": true,
-    "new_pre_release": "v0.1.0-test.3",
+    "new_pre_release": "v0.1.0-test.4",
     "post_release_fixes_ci_green": true,
-    "post_release_fixes_release_candidate_dry_build": true
+    "post_release_fixes_release_candidate_dry_build": true,
+    "post_test4_fixes_ci_green": "pending",
+    "post_test4_fixes_candidate_prepared": false
   },
   "fixes": {
     "fix1_android_reconnect": {
@@ -181,6 +187,30 @@
       "status": "implemented-and-tested",
       "detail": "Single tag resolution, safe asset names, all reports scanned, four symbol families enforced. Real v0.1.0-test.3 verifier 0 FAIL/0 WARN. 99 Python tests pass.",
       "unverified": "A fresh local AppImage rebuild was not run; CI built the dry candidate and reported glibc 2.34/GLIBCXX 3.4.29/CXXABI 1.3.13/no OPENSSL."
+    },
+    "fix6_periodic_discovery": {
+      "commit": "d7772da",
+      "status": "implemented-and-tested (unit)",
+      "detail": "One periodic Discovery task (30 s active / 120 s idle) starts with the advertisement and is cancelled on restart/stop; IPv6 addresses handled by length. 8 new tests; full daemon suite 107 passed.",
+      "unverified": "Live mDNS between two hosts; no second host here."
+    },
+    "fix7_scanner_fail_closed": {
+      "commit": "4f06979",
+      "status": "implemented-and-tested",
+      "detail": "Per-file InspectionError FAILs for missing readelf, timeout, non-zero exit, empty output with version sections and unparseable output; only clean files count. 11 cases; real test.4 AppImage 312 inspected/0 failed with all four families measured.",
+      "unverified": "None beyond the published image itself; no fresh local rebuild was needed for this scan."
+    },
+    "fix8_verifier_duplicates": {
+      "commit": "9c4a960",
+      "status": "implemented-and-tested",
+      "detail": "Duplicate asset names rejected before download; duplicate SHA256SUMS entries rejected on the second line. Extended tests cover missing/extra files, unsafe names, manifest JSON/commit and checksum mismatches.",
+      "unverified": "None; fixtures exercise the real code paths."
+    },
+    "fix9_target_validation": {
+      "commit": "b68d453",
+      "status": "implemented-and-tested (JVM)",
+      "detail": "Strict structural IPv6/host validation in fromParts; every reviewed malformed value rejected; host-only IPv6 only via fromParts. Migration behind a fakeable prefs surface, idempotent, legacy key removed, trust keys untouched. 33 JVM tests, 0 failures.",
+      "unverified": "SharedPreferences through a real Android Context (no Robolectric); live IPv6 reconnect."
     },
     "workflow_trigger": {
       "commit": "4c3d97c",

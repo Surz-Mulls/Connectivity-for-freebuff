@@ -5,6 +5,23 @@ Newest entry on top. One entry per module. Status vocabulary: **implemented-and-
 
 ---
 
+## 2026-11-27 — Post-test.4 review pass: four remaining findings fixed
+
+Branch `Grok`, four code commits on top of `06b98c8`. No tag was moved and no release was published;
+`v0.1.0-test.4` and all older tags/assets are untouched.
+
+| Fix | Commit | Status | Evidence |
+|---|---|---|---|
+| Periodic discovery drives the reconnect re-arm | `d7772da` | implemented-and-tested (unit) | `Discovery` owns one periodic browse task (30 s while a session/reconnect series is active, 120 s idle), cancelled on restart and `stop()`. IPv4/IPv6 addresses are decoded by length, not `inet_ntoa`. `test_periodic_discovery.py`: 8 tests incl. exhausted-trusted re-arm, untrusted/revoked/unknown rejection, duplicate-start single task, clean shutdown, 16-byte IPv6 capture. Full daemon suite **107 passed**. No live mDNS host, so live multicast remains unverified |
+| ELF scanner fails closed per file | `4f06979` | implemented-and-tested | Missing readelf, timeout, non-zero exit, empty output with `.gnu.version*` sections, unparseable output and declared-but-unparsed entries each FAIL with the file path; only fully inspected files contribute to floors. 11 test cases. Real `v0.1.0-test.4` AppImage (`f8cbad51…`): **312 inspected, 0 failed**, GLIBC 2.34, GLIBCXX 3.4.29, CXXABI 1.3.13, no OPENSSL |
+| Verifier rejects duplicates | `9c4a960` | implemented-and-tested | Duplicate asset names fail before any download; a duplicate `SHA256SUMS` entry fails on the second line instead of overwriting. Tests also cover missing/extra files, `..`/absolute names, malformed manifest JSON, commit mismatch and checksum mismatch; `main()` exits 1 on the duplicate-sums fixture |
+| Desktop target validation + migration idempotency | `b68d453` | implemented-and-tested (JVM) | `DesktopTarget` rejects leftover brackets, whitespace and colon-containing hosts that are not strict IPv6 literals; host-only IPv6 is accepted only via `fromParts`, documented in KDoc. Migration moved behind a fakeable preference surface. Android **33 JVM tests, 0 failures**, `testDebugUnitTest BUILD SUCCESSFUL` in 2m03s; the migration suites prove the second read does not re-run/write migration, the legacy key is gone, and trust/fingerprint keys are untouched |
+
+Not verified (device/browser-bound, unchanged): real Mi 12 Wi-Fi/sleep-wake/IPv6 reconnect, the
+`SharedPreferences` migration through a real Android `Context` (no Robolectric; the pure migration
+is tested), a live Firefox/Zen session, and live mDNS between two hosts. Debian/RPM packaging still
+has no infrastructure in this repo; nothing placeholder was produced.
+
 ## 2026-11-26 — v0.1.0-test.4 published
 
 Tag `v0.1.0-test.4` -> `b96fccfa6fe4d2419eb6673c38d7d67cd89bbe7d`. Pre-release published

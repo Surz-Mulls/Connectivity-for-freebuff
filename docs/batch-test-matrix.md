@@ -42,12 +42,13 @@ Hyprland, no Qt). Hardware rows are marked blocked/not verified, never pass.
 | A25 | Diagnostics redaction | run + serialise | home path absent, JSON+MD written | pass | **pass** |
 | A26 | Theme drift | `generate-theme.py --check` | no drift | pass | **pass** |
 | A27 | Android build | `gradle :app:assembleDebug` | APK produced, debug-signed | see `docs/implementation-validation.md` | **pass/fail recorded there** |
-| A28 | Android reconnect budget | `gradle :app:testDebugUnitTest` (`ReconnectPolicyTest`) | scheduled retries reserve exactly `maxAttempts`, then stop | 27 JVM tests, 0 failures; new test reserves 1..10 then returns null | **pass** |
-| A29 | Desktop reconnect re-arm | `pytest daemon/tests/test_reconnect.py` | exhausted trusted peer rediscovered -> exactly one new loop; untrusted/revoked -> none | 8 passed | **pass** |
-| A30 | Android desktop target | `gradle :app:testDebugUnitTest` (`DesktopTargetTest`) | IPv6-safe legacy parsing; separate host/port validation | 27 JVM tests, 0 failures | **pass** |
+| A28 | Android reconnect budget | `gradle :app:testDebugUnitTest` (`ReconnectPolicyTest`) | scheduled retries reserve exactly `maxAttempts`, then stop | 33 JVM tests, 0 failures; the policy test reserves 1..10 then returns null | **pass** |
+| A29 | Desktop reconnect re-arm | `pytest daemon/tests/test_reconnect.py daemon/tests/test_periodic_discovery.py` | a periodic discovery tick after exhaustion starts exactly one bounded loop; untrusted/revoked/unknown -> none; stop cancels cleanly | 16 passed (8 reconnect + 8 periodic discovery) | **pass** |
+| A30 | Android desktop target + migration | `gradle :app:testDebugUnitTest` (`DesktopTargetTest`, `DesktopTargetMigrationTest`) | every reviewed malformed host rejected; valid IPv4/bracketed/bare IPv6 accepted; migration runs once, removes the legacy key, leaves trust keys untouched | 33 JVM tests, 0 failures (5 + 5 in these suites) | **pass** |
 | A31 | Firefox/Zen native host | `python3 scripts/tests/test_browser_extension_install.py` | Firefox `allowed_extensions` exact; Chromium manifests unchanged; uninstall removes both | pass | **pass** |
-| A32 | Runtime symbol families | `python3 scripts/tests/test_check_appimage_glibc.py` | GLIBCXX_3.4.29 fixture fails a 3.4.20 floor; all four families parsed | pass | **pass** |
-| A33 | Release verifier hardening | `python3 scripts/tests/test_verify_release.py`; `tools/verify_release.py v0.1.0-test.3` | unsafe asset names rejected; every report scanned; real release 0 FAIL/0 WARN | pass | **pass** |
+| A32 | Runtime symbol families, fail-closed | `python3 scripts/tests/test_check_appimage_glibc.py` | missing readelf, timeout, non-zero exit, empty output with version sections, unparseable output and declared-but-unparsed entries each FAIL with the file path; only clean files count toward floors | 11 cases pass; unreadable-file fixture makes `main()` exit 1 | **pass** |
+| A33 | Release verifier duplicates and integrity | `python3 scripts/tests/test_verify_release.py`; `tools/verify_release.py v0.1.0-test.3` | duplicate asset names fail before download; duplicate SHA256SUMS entries fail; missing/extra/traversal/absolute names, malformed manifest, commit mismatch and checksum mismatch covered; real release 0 FAIL/0 WARN | pass | **pass** |
+| A34 | Real AppImage symbol scan | `python3 scripts/check-appimage-glibc.py continuity-linux-x86_64.AppImage` on the published `v0.1.0-test.4` asset (`f8cbad51…`) | every ELF inspected; four-family floors reported | **312 inspected, 0 failed**: GLIBC 2.34, GLIBCXX 3.4.29, CXXABI 1.3.13, no OPENSSL | **pass** |
 
 ## B. Requires the phone (blocked here)
 
